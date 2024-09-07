@@ -1,59 +1,19 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct UserSessionData {
-    pub steam_id: Option<u64>,
-}
+pub mod models;
+pub mod schema;
 
-impl Default for UserSessionData {
-    fn default() -> Self {
-        Self { steam_id: None }
-    }
-}
+mod usersession;
+pub use usersession::{UserSessionData, UserSession};
 
-pub struct UserSession {
-    pub session: tower_sessions::Session,
-    data: UserSessionData,
-}
+pub mod diesel_sessionstore;
 
-impl UserSession {
-    const KEY: &'static str = "user.data";
+pub async fn db_connection() -> diesel_async::AsyncPgConnection {
+    use diesel_async::AsyncConnection;
 
-    pub fn data(&self) -> &UserSessionData {
-        &self.data
-    }
+    let database_url = std::env::var("DATABASE_URL").expect("'DATABASE_URL' must be set");
 
-    pub async fn modify_data<F>(&mut self, func: F)
-    where
-        F: FnOnce(&mut UserSessionData),
-    {
-        let mut entry = &mut self.data;
-        func(&mut entry);
-
-        self.session.insert(Self::KEY, entry).await.unwrap();
-    }
-}
-
-#[async_trait::async_trait]
-impl<S> axum::extract::FromRequestParts<S> for UserSession
-where
-    S: Send + Sync,
-{
-    type Rejection = (axum::http::StatusCode, &'static str);
-
-    async fn from_request_parts(
-        req: &mut axum::http::request::Parts,
-        state: &S,
-    ) -> Result<Self, Self::Rejection> {
-        let session = tower_sessions::Session::from_request_parts(req, state).await?;
-
-        let guest_data: UserSessionData = session.get(Self::KEY).await.unwrap().unwrap_or_default();
-
-        Ok(Self {
-            session,
-            data: guest_data,
-        })
-    }
+    diesel_async::AsyncPgConnection::establish(&database_url).await.unwrap_or_else(|e| panic!("Error connecting to {} - {:?}", database_url, e))
 }
 
 pub async fn get_demo_from_upload(name: &str, mut form: axum::extract::Multipart) -> Option<axum::body::Bytes> {

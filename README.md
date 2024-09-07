@@ -9,3 +9,6 @@ A self-hosted demo analysis tool
 ### Backend
 1. Navigate to the root folder
 2. Run `cargo run --bin backend`
+
+### DB Stuff
+We use [diesel]() as the ORM and using the cli for all the migrations

@@ -1,9 +1,18 @@
 use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
 
+use diesel::prelude::*;
+use diesel_async::{RunQueryDsl, AsyncConnection, AsyncPgConnection};
+
 static OPENID: std::sync::LazyLock<steam_openid::SteamOpenId> = std::sync::LazyLock::new(|| {
     steam_openid::SteamOpenId::new("http://192.168.0.156:3000", "/api/steam/callback").unwrap()
 });
 static UPLOAD_FOLDER: &str = "uploads/";
+
+const MIGRATIONS: diesel_async_migrations::EmbeddedMigrations = diesel_async_migrations::embed_migrations!("../migrations/");
+
+async fn run_migrations(connection: &mut diesel_async::AsyncPgConnection) {
+    MIGRATIONS.run_pending_migrations(connection).await.unwrap();
+}
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
@@ -16,7 +25,11 @@ async fn main() {
 
     tracing::info!("Starting...");
 
-    let session_store = tower_sessions::MemoryStore::default();
+    tracing::info!("Applying Migrations");
+    run_migrations(&mut backend::db_connection().await).await;
+    tracing::info!("Completed Migrations");
+
+    let session_store = backend::diesel_sessionstore::DieselStore::new();
     let session_layer = tower_sessions::SessionManagerLayer::new(session_store)
         .with_secure(false)
         .with_expiry(tower_sessions::Expiry::OnInactivity(
@@ -60,8 +73,11 @@ async fn upload(session: backend::UserSession, form: axum::extract::Multipart) -
 
     tokio::fs::write(demo_file_path, file_content).await.unwrap();
 
-    // TODO
-    // Insert Demo into users list of demos and possibly queue demo for analysis?
+    let query = diesel::dsl::insert_into(backend::schema::demos::dsl::demos).values(backend::models::Demo {
+        demo_id: timestamp_secs as i64,
+        steam_id: steam_id as i64,
+    });
+    query.execute(&mut backend::db_connection().await).await.unwrap();
 
     Ok(axum::response::Redirect::to("/"))
 }
@@ -100,6 +116,11 @@ async fn steam_callback(
 async fn demos_list(session: backend::UserSession) -> Result<(), axum::http::StatusCode> {
     let steam_id = session.data().steam_id.ok_or_else(|| axum::http::StatusCode::UNAUTHORIZED)?;
     tracing::info!("SteamID: {:?}", steam_id);
+
+    let query = backend::schema::demos::dsl::demos.filter(backend::schema::demos::dsl::steam_id.eq(steam_id as i64));
+    let results: Vec<backend::models::Demo> = query.load(&mut backend::db_connection().await).await.unwrap();
+
+    dbg!(&results);
 
     Ok(())
 }
