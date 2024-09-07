@@ -1,11 +1,13 @@
 use leptos::*;
-use leptos::prelude::*;
+use leptos_router::*;
 
-async fn load_demos() -> usize {
+use frontend::{UploadDemo, TopBar, Homepage, Demo};
+
+async fn load_demos() -> Vec<common::BaseDemoInfo> {
     let res = reqwasm::http::Request::get("/api/demos/list").send().await.unwrap();
-    dbg!(res);
+    let demos: Vec<common::BaseDemoInfo> = res.json().await.unwrap();
 
-    0
+    demos
 }
 
 fn main() {
@@ -14,16 +16,16 @@ fn main() {
     });
 
     mount_to_body(move || view! {
-        <p>"Hello, world!"</p>
-        <a href="/api/steam/login">Steam Login</a> { move || match async_data.get() {
-            None => 123,
-            Some(v) => v,
-        } }
-
-        <form action="/api/demos/upload" method="post" enctype="multipart/form-data">
-            Select File to upload
-            <input type="file" name="demo" id="demo"></input>
-            <input type="submit" value="Upload Image" name="submit"></input>
-        </form>
+        <Router>
+            <nav>
+                <TopBar />
+            </nav>
+            <main>
+                <Routes>
+                    <Route path="/" view=Homepage />
+                    <Route path="/demo/:id" view=Demo />
+                </Routes>
+            </main>
+        </Router>
     })
 }

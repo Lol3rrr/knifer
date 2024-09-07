@@ -1,6 +1,3 @@
-use diesel::prelude::*;
-use diesel_async::RunQueryDsl;
-
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct UserSessionData {
     pub steam_id: Option<u64>,

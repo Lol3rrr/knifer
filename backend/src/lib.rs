@@ -1,5 +1,3 @@
-use serde::{Deserialize, Serialize};
-
 pub mod models;
 pub mod schema;
 
@@ -34,3 +32,5 @@ pub async fn get_demo_from_upload(name: &str, mut form: axum::extract::Multipart
 
     None
 }
+
+pub mod api;

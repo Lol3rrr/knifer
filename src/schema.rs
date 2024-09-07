@@ -1,9 +1,9 @@
 // @generated automatically by Diesel CLI.
 
 diesel::table! {
-    demos (steam_id) {
+    demos (steam_id, demo_id) {
         steam_id -> Int8,
-        demo_id -> Nullable<Int8>,
+        demo_id -> Int8,
     }
 }
 
