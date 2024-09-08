@@ -108,8 +108,24 @@ pub mod steam {
     }
 }
 
+pub mod user {
+    pub fn router() -> axum::Router {
+        axum::Router::new()
+            .route("/status", axum::routing::get(status))
+    }
+
+    async fn status(session: crate::UserSession) -> axum::http::StatusCode {
+        if session.data().steam_id.is_some() {
+            axum::http::StatusCode::OK
+        } else {
+            axum::http::StatusCode::UNAUTHORIZED
+        }
+    }
+}
+
 pub fn router() -> axum::Router {
     axum::Router::new()
         .nest("/steam/", steam::router("http://192.168.0.156:3000", "/api/steam/callback"))
         .nest("/demos/", demos::router("uploads/"))
+        .nest("/user/", user::router())
 }

@@ -15,10 +15,25 @@ pub fn demo_list_entry(demo: common::BaseDemoInfo) -> impl leptos::IntoView {
 
 #[leptos::component]
 pub fn steam_login(height: &'static str, width: &'static str) -> impl leptos::IntoView {
+    let user_status = create_resource(|| (), |_| async move {
+        let res = reqwasm::http::Request::get("/api/user/status").send().await.unwrap();
+        res.status() == 200
+    });
+
+    let tmp = move || if user_status.get().unwrap_or(false) {
+        view! {
+            <p>Logged in</p>
+        }.into_any()
+    } else {
+        view! {    
+            <a href="/api/steam/login">
+                <img src="https://community.akamai.steamstatic.com/public/images/signinthroughsteam/sits_01.png" alt="Steam Login" style=format!("height: {height}; width: {width}") />
+            </a>
+        }.into_any()
+    };
+
     view! {
-        <a href="/api/steam/login">
-            <img src="https://community.akamai.steamstatic.com/public/images/signinthroughsteam/sits_01.png" alt="Steam Login" style=format!("height: {height}; width: {width}") />
-        </a>
+        { tmp }
     }
 }
 
@@ -49,10 +64,14 @@ pub fn top_bar() -> impl leptos::IntoView {
 
             background-color: #28282f;
             color: #d5d5d5;
+
+            display: grid;
+            grid-template-columns: 15vw auto auto calc(4vh * (180/35) + 20px);
         }
 
         .group {
-            display: inline-block;
+            display: block;
+            width: 30vw;
         }
 
         .elem {
@@ -61,23 +80,25 @@ pub fn top_bar() -> impl leptos::IntoView {
 
         .logo {
             color: #d5d5d5;
+            width: 15vw;
+            font-size: 24px;
+            padding: 0px;
+            margin: 0px;
         }
     };
 
     view! {class = style,
         <div class="bar">
-            <A href="/" class="group">
+            <A href="/">
                 <p class="logo">Knifer</p>
             </A>
             
-            <div class="group" style="float: right">
-                <div class="elem">
-                    Upload Demo
-                </div>
+            <div class="elem">
+                Upload Demo
+            </div>
 
-                <div class="elem">
-                    <SteamLogin height="4vh" width="auto" />
-                </div>
+            <div class="elem" style="grid-column-start: 4">
+                <SteamLogin height="4vh" width="auto" />
             </div>
         </div>
     }
