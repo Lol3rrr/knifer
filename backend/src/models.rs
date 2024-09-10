@@ -4,7 +4,7 @@ use diesel::prelude::*;
 #[diesel(table_name = crate::schema::sessions)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct Session {
-    pub id: Vec<i64>,
+    pub id: String,
     pub steamid: Option<String>,
     pub expiry_date: String,
 }
@@ -13,7 +13,7 @@ pub struct Session {
 #[diesel(table_name = crate::schema::demos)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct Demo {
-    pub steam_id: i64,
+    pub steam_id: String,
     pub demo_id: i64,
 }
 

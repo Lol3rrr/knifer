@@ -24,7 +24,7 @@ pub mod demos {
         let steam_id = session.data().steam_id.ok_or_else(|| axum::http::StatusCode::UNAUTHORIZED)?;
         tracing::info!("SteamID: {:?}", steam_id);
 
-        let query = crate::schema::demos::dsl::demos.filter(crate::schema::demos::dsl::steam_id.eq(steam_id as i64));
+        let query = crate::schema::demos::dsl::demos.filter(crate::schema::demos::dsl::steam_id.eq(steam_id.to_string()));
         let results: Vec<crate::models::Demo> = query.load(&mut crate::db_connection().await).await.unwrap();
     
         Ok(axum::response::Json(results.into_iter().map(|demo| common::BaseDemoInfo {
@@ -52,7 +52,7 @@ pub mod demos {
 
         let query = diesel::dsl::insert_into(crate::schema::demos::dsl::demos).values(crate::models::Demo {
             demo_id: timestamp_secs as i64,
-            steam_id: steam_id as i64,
+            steam_id: steam_id.to_string(),
         });
         query.execute(&mut crate::db_connection().await).await.unwrap();
 

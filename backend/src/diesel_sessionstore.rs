@@ -42,7 +42,7 @@ impl DieselStore {
 #[async_trait::async_trait]
 impl tower_sessions::SessionStore for DieselStore {
     async fn save(&self,session_record: &tower_sessions::session::Record) ->  tower_sessions::session_store::Result<()> { 
-        let db_id = self.id_to_bytes(session_record.id.0);
+        let db_id = session_record.id.0.to_string();
 
         let data = serde_json::to_value(&session_record.data).unwrap();
         let expiry_date = self.expiry_to_string(&session_record.expiry_date);
@@ -69,7 +69,7 @@ impl tower_sessions::SessionStore for DieselStore {
     }
 
     async fn load(&self,session_id: &tower_sessions::session::Id) ->  tower_sessions::session_store::Result<Option<tower_sessions::session::Record>> {
-        let db_id = self.id_to_bytes(session_id.0);
+        let db_id = session_id.0.to_string();
 
         let query = crate::schema::sessions::dsl::sessions.filter(crate::schema::sessions::dsl::id.eq(db_id));
 
@@ -97,14 +97,14 @@ impl tower_sessions::SessionStore for DieselStore {
         };
 
         Ok(Some(tower_sessions::session::Record {
-            id: tower_sessions::session::Id(self.bytes_to_id(result.id)),
-            data: data,
+            id: tower_sessions::session::Id(result.id.parse().unwrap()),
+            data,
             expiry_date: self.string_to_expiry(&result.expiry_date),
         }))
     }
 
     async fn delete(&self,session_id: &tower_sessions::session::Id) -> tower_sessions::session_store::Result<()> {
-        let db_id = self.id_to_bytes(session_id.0);
+        let db_id = session_id.0.to_string();
 
         let query = crate::schema::sessions::dsl::sessions.filter(crate::schema::sessions::dsl::id.eq(db_id));
 

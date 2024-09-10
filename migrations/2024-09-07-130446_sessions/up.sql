@@ -1,6 +1,6 @@
 -- Your SQL goes here
 CREATE TABLE IF NOT EXISTS sessions (
-  id bigint[2] PRIMARY KEY,
+  id TEXT NOT NULL PRIMARY KEY,
   steamid TEXT,
-  expiry_date TEXT
+  expiry_date TEXT NOT NULL
 )
