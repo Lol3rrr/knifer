@@ -19,6 +19,7 @@ pub mod demos {
             }))
     }
 
+    #[tracing::instrument(skip(session))]
     async fn list(session: UserSession) -> Result<axum::response::Json<Vec<common::BaseDemoInfo>>, axum::http::StatusCode> {
         let steam_id = session.data().steam_id.ok_or_else(|| axum::http::StatusCode::UNAUTHORIZED)?;
         tracing::info!("SteamID: {:?}", steam_id);
@@ -31,6 +32,7 @@ pub mod demos {
         }).collect::<Vec<_>>()))
     }
 
+    #[tracing::instrument(skip(state, session))]
     async fn upload(State(state): State<Arc<DemoState>>, session: crate::UserSession, form: axum::extract::Multipart) -> Result<axum::response::Redirect, (axum::http::StatusCode, &'static str)> {
         let steam_id = session.data().steam_id.ok_or_else(|| (axum::http::StatusCode::UNAUTHORIZED, "Not logged in"))?;
 
@@ -57,6 +59,7 @@ pub mod demos {
         Ok(axum::response::Redirect::to("/"))
     }
 
+    #[tracing::instrument(skip(session))]
     async fn info(session: UserSession, Path(demo_id): Path<i64>) -> Result<(), axum::http::StatusCode> {
         tracing::info!("Get info for Demo: {:?}", demo_id);
 
@@ -90,12 +93,14 @@ pub mod steam {
             .with_state(Arc::new(steam_openid::SteamOpenId::new(url, callback_path).unwrap()))
     }
 
+    #[tracing::instrument(skip(openid))]
     async fn steam_login(State(openid): State<Arc<steam_openid::SteamOpenId>>) -> Result<axum::response::Redirect, axum::http::StatusCode> {
         let url = openid.get_redirect_url();
 
         Ok(axum::response::Redirect::to(url))
     }
 
+    #[tracing::instrument(skip(openid, session, request))]
     async fn steam_callback(
         State(openid): State<Arc<steam_openid::SteamOpenId>>,
         mut session: crate::UserSession,
@@ -154,6 +159,7 @@ pub mod user {
             .route("/status", axum::routing::get(status))
     }
 
+    #[tracing::instrument(skip(session))]
     async fn status(session: crate::UserSession) -> Result<axum::response::Json<common::UserStatus>, reqwest::StatusCode> {
         let steam_id = match session.data().steam_id {
             Some(s) => s,
