@@ -15,12 +15,16 @@ fn main() {
         load_demos().await
     });
 
+    let (upload_demo_read, upload_demo_write) = create_signal(frontend::DemoUploadStatus::Hidden);
+
     mount_to_body(move || view! {
         <Router>
             <nav>
-                <TopBar />
+                <TopBar update_demo_visible=upload_demo_write />
             </nav>
             <main>
+                <UploadDemo shown=upload_demo_read update_shown=upload_demo_write />
+
                 <Routes>
                     <Route path="/" view=Homepage />
                     <Route path="/demo/:id" view=Demo />

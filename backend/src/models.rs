@@ -5,7 +5,7 @@ use diesel::prelude::*;
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct Session {
     pub id: Vec<i64>,
-    pub data: serde_json::Value,
+    pub steamid: Option<String>,
     pub expiry_date: String,
 }
 
@@ -15,4 +15,12 @@ pub struct Session {
 pub struct Demo {
     pub steam_id: i64,
     pub demo_id: i64,
+}
+
+#[derive(Queryable, Selectable, Insertable, Debug)]
+#[diesel(table_name = crate::schema::users)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct User {
+    pub steamid: String,
+    pub name: String,
 }

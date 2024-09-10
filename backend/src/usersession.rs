@@ -15,7 +15,7 @@ pub struct UserSession {
 }
 
 impl UserSession {
-    const KEY: &'static str = "user.data";
+    pub const KEY: &'static str = "user.data";
 
     pub fn data(&self) -> &UserSessionData {
         &self.data

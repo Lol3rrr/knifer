@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 
@@ -45,15 +47,19 @@ impl tower_sessions::SessionStore for DieselStore {
         let data = serde_json::to_value(&session_record.data).unwrap();
         let expiry_date = self.expiry_to_string(&session_record.expiry_date);
 
+        let steamid = session_record.data.get(crate::UserSession::KEY).map(|e| serde_json::from_value::<crate::UserSessionData>(e.clone()).ok()).flatten().map(|d| {
+            d.steam_id.map(|s| s.to_string())
+        }).flatten();
+
         let query = diesel::dsl::insert_into(crate::schema::sessions::dsl::sessions)
             .values(crate::models::Session {
                 id: db_id,
-                data: data.clone(),
+                steamid: steamid.clone(),
                 expiry_date: expiry_date.clone(),
             })
             .on_conflict(crate::schema::sessions::dsl::id)
             .do_update()
-            .set((crate::schema::sessions::dsl::data.eq(data), crate::schema::sessions::dsl::expiry_date.eq(expiry_date)));
+            .set((crate::schema::sessions::dsl::steamid.eq(steamid), crate::schema::sessions::dsl::expiry_date.eq(expiry_date)));
 
         let mut connection = crate::db_connection().await;
 
@@ -76,11 +82,23 @@ impl tower_sessions::SessionStore for DieselStore {
             return Err(tower_sessions::session_store::Error::Backend("Found more than 1 result".to_string()));
         }
 
+        if result.is_empty() {
+            return Ok(None);
+        }
+
         let result = result.pop().unwrap();
+
+        let data = {
+            let mut tmp = HashMap::<String, _>::new();
+            tmp.insert(crate::UserSession::KEY.to_string(), serde_json::to_value(&crate::UserSessionData {
+                steam_id: result.steamid.map(|s| s.parse().ok()).flatten(),
+            }).unwrap());
+            tmp
+        };
 
         Ok(Some(tower_sessions::session::Record {
             id: tower_sessions::session::Id(self.bytes_to_id(result.id)),
-            data: serde_json::from_value(result.data).unwrap(),
+            data: data,
             expiry_date: self.string_to_expiry(&result.expiry_date),
         }))
     }
