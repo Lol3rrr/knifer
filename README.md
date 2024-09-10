@@ -1,6 +1,15 @@
 # Knifer
 A self-hosted demo analysis tool
 
+## Usage
+### Environment Variables
+- `DATABASE_URL`
+- `STEAM_API_KEY`
+
+### Needed external Software
+- `postgresql`
+
+
 ## Development
 ### Frontend
 1. Navigate to the frontend folder
