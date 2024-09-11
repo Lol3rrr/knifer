@@ -24,3 +24,7 @@ diesel_async_migrations = { version = "0.15" }
 reqwest = { version = "0.12", features = ["json"] }
 
 common = { path = "../common/" }
+
+l_demoparser = { package = "parser", git = "https://github.com/LaihoE/demoparser.git", ref = "main" }
+ahash = { version = "0.8" }
+memmap2 = { version = "0.9" }

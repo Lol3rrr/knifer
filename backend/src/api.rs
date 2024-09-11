@@ -7,15 +7,17 @@ pub mod demos {
 
     struct DemoState {
         upload_folder: std::path::PathBuf,
+        base_analysis: tokio::sync::mpsc::UnboundedSender<crate::analysis::AnalysisInput>
     }
 
-    pub fn router<P>(upload_folder: P) -> axum::Router where P: Into<std::path::PathBuf> {
+    pub fn router<P>(upload_folder: P, base_analysis: tokio::sync::mpsc::UnboundedSender<crate::analysis::AnalysisInput>) -> axum::Router where P: Into<std::path::PathBuf> {
         axum::Router::new()
             .route("/list", axum::routing::get(list))
             .route("/upload", axum::routing::post(upload).layer(axum::extract::DefaultBodyLimit::max(500*1024*1024)))
             .route("/:id/info", axum::routing::get(info))
             .with_state(Arc::new(DemoState {
                 upload_folder: upload_folder.into(),
+                base_analysis,
             }))
     }
 
@@ -24,11 +26,12 @@ pub mod demos {
         let steam_id = session.data().steam_id.ok_or_else(|| axum::http::StatusCode::UNAUTHORIZED)?;
         tracing::info!("SteamID: {:?}", steam_id);
 
-        let query = crate::schema::demos::dsl::demos.filter(crate::schema::demos::dsl::steam_id.eq(steam_id.to_string()));
-        let results: Vec<crate::models::Demo> = query.load(&mut crate::db_connection().await).await.unwrap();
+        let query = crate::schema::demos::dsl::demos.inner_join(crate::schema::demo_info::dsl::demo_info).select((crate::models::Demo::as_select(), crate::models::DemoInfo::as_select())).filter(crate::schema::demos::dsl::steam_id.eq(steam_id.to_string()));
+        let results: Vec<(crate::models::Demo, crate::models::DemoInfo)> = query.load(&mut crate::db_connection().await).await.unwrap();
     
-        Ok(axum::response::Json(results.into_iter().map(|demo| common::BaseDemoInfo {
+        Ok(axum::response::Json(results.into_iter().map(|(demo, info)| common::BaseDemoInfo {
             id: demo.demo_id,
+            map: info.map,
         }).collect::<Vec<_>>()))
     }
 
@@ -46,15 +49,29 @@ pub mod demos {
         }
 
         let timestamp_secs = std::time::SystemTime::now().duration_since(std::time::SystemTime::UNIX_EPOCH).unwrap().as_secs();
+        let demo_id = timestamp_secs as i64;
         let demo_file_path = user_folder.join(format!("{}.dem", timestamp_secs));
 
-        tokio::fs::write(demo_file_path, file_content).await.unwrap();
+        tokio::fs::write(&demo_file_path, file_content).await.unwrap();
+
+        let mut db_con = crate::db_connection().await;
 
         let query = diesel::dsl::insert_into(crate::schema::demos::dsl::demos).values(crate::models::Demo {
-            demo_id: timestamp_secs as i64,
+            demo_id,
             steam_id: steam_id.to_string(),
         });
-        query.execute(&mut crate::db_connection().await).await.unwrap();
+        query.execute(&mut db_con).await.unwrap();
+
+        state.base_analysis.send(crate::analysis::AnalysisInput {
+            steamid: steam_id.to_string(),
+            demoid: demo_id,
+            path: demo_file_path,
+        });
+        let processing_query = diesel::dsl::insert_into(crate::schema::processing_status::dsl::processing_status).values(crate::models::ProcessingStatus {
+            demo_id,
+            info: 0,
+        });
+        processing_query.execute(&mut db_con).await.unwrap();
 
         Ok(axum::response::Redirect::to("/"))
     }
@@ -189,9 +206,9 @@ pub mod user {
     }
 }
 
-pub fn router() -> axum::Router {
+pub fn router(base_analysis: tokio::sync::mpsc::UnboundedSender<crate::analysis::AnalysisInput>) -> axum::Router {
     axum::Router::new()
         .nest("/steam/", steam::router("http://localhost:3000", "/api/steam/callback"))
-        .nest("/demos/", demos::router("uploads/"))
+        .nest("/demos/", demos::router("uploads/", base_analysis))
         .nest("/user/", user::router())
 }

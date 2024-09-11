@@ -24,3 +24,19 @@ pub struct User {
     pub steamid: String,
     pub name: String,
 }
+
+#[derive(Queryable, Selectable, Insertable, Debug)]
+#[diesel(table_name = crate::schema::demo_info)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct DemoInfo {
+    pub demo_id: i64,
+    pub map: String,
+}
+
+#[derive(Queryable, Selectable, Insertable, Debug)]
+#[diesel(table_name = crate::schema::processing_status)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct ProcessingStatus {
+    pub demo_id: i64,
+    pub info: i16,
+}

@@ -1,4 +1,5 @@
 use leptos::*;
+use leptos_router::{Route, Routes, Outlet, A};
 
 #[leptos::component]
 pub fn demo() -> impl leptos::IntoView {
@@ -12,6 +13,28 @@ pub fn demo() -> impl leptos::IntoView {
     });
 
     view! {
-        <h2>Demo - {id}</h2>
+        <h2>Demo - { id }</h2>
+
+        <div>
+            <A href="">Scoreboard</A>
+            <A href="perround">Per Round</A>
+        </div>
+        <div>
+            <Outlet/>
+        </div>
+    }
+}
+
+#[leptos::component]
+pub fn scoreboard() -> impl leptos::IntoView {
+    view! {
+        <h3>Scoreboard</h3>
+    }
+}
+
+#[leptos::component]
+pub fn per_round() -> impl leptos::IntoView {
+    view! {
+        <h3>Per Round</h3>
     }
 }

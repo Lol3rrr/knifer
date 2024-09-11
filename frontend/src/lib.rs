@@ -1,7 +1,7 @@
 use leptos::*;
 use leptos_router::A;
 
-mod demo;
+pub mod demo;
 pub use demo::Demo;
 
 mod navbar;
@@ -17,7 +17,7 @@ pub enum DemoUploadStatus {
 pub fn demo_list_entry(demo: common::BaseDemoInfo) -> impl leptos::IntoView {
     view! {
         <li>
-            <A href=format!("/demo/{}", demo.id)>Demo: {demo.id}</A>
+            <A href=format!("demo/{}", demo.id)>Demo: {demo.map} - {demo.id}</A>
         </li>
     }
 }

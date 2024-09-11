@@ -6,6 +6,8 @@ pub use usersession::{UserSessionData, UserSession};
 
 pub mod diesel_sessionstore;
 
+pub mod analysis;
+
 pub async fn db_connection() -> diesel_async::AsyncPgConnection {
     use diesel_async::AsyncConnection;
 
