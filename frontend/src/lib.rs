@@ -17,7 +17,9 @@ pub enum DemoUploadStatus {
 pub fn demo_list_entry(demo: common::BaseDemoInfo) -> impl leptos::IntoView {
     view! {
         <li>
-            <A href=format!("demo/{}", demo.id)>Demo: {demo.map} - {demo.id}</A>
+            <A href=format!("demo/{}/scoreboard", demo.id)>
+                <span>{demo.map} - {demo.id}</span>
+            </A>
         </li>
     }
 }

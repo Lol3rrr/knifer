@@ -57,6 +57,7 @@ pub fn top_bar(update_demo_visible: WriteSignal<DemoUploadStatus>) -> impl lepto
             font-size: 24px;
             padding: 0px;
             margin: 0px;
+            margin-left: 1vw;
         }
     };
 

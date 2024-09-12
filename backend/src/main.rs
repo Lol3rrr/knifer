@@ -68,7 +68,7 @@ async fn main() {
     let router = axum::Router::new()
         .nest("/api/", backend::api::router(base_analysis_tx))
         .layer(session_layer)
-        .nest_service("/", tower_http::services::ServeDir::new("frontend/dist/"));
+        .nest_service("/", tower_http::services::ServeDir::new("../frontend/dist/"));
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
     axum::serve(listener, router).await.unwrap();

@@ -29,6 +29,7 @@ fn main() {
                     <Route path="/" view=Homepage />
                     <Route path="/demo/:id" view=Demo>
                         <Route path="perround" view=frontend::demo::PerRound />
+                        <Route path="scoreboard" view=frontend::demo::Scoreboard />
                         <Route path="" view=frontend::demo::Scoreboard />
                     </Route>
                 </Routes>

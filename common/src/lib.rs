@@ -9,3 +9,9 @@ pub struct UserStatus {
     pub name: String,
     pub steamid: String,
 }
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct DemoInfo {
+    pub id: i64,
+    pub map: String,
+}

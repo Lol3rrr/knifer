@@ -10,6 +10,7 @@ pub struct AnalysisInput {
 #[derive(Debug)]
 pub struct BaseInfo {
     pub map: String,
+    pub players: Vec<()>
 }
 
 #[tracing::instrument(skip(input))]
@@ -126,6 +127,7 @@ pub fn analyse_base(input: AnalysisInput) -> BaseInfo {
     }
 
     BaseInfo {
-        map: header.get("map_name").cloned().unwrap_or_default()
+        map: header.get("map_name").cloned().unwrap_or_default(),
+        players: Vec::new()
     }
 }
