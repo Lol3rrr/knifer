@@ -28,6 +28,8 @@ async fn main() {
 
     let (base_analysis_tx, mut base_analysis_rx) = tokio::sync::mpsc::unbounded_channel::<backend::analysis::AnalysisInput>();
     tokio::task::spawn_blocking(move || {
+        use diesel_async::AsyncConnection;
+
         while let Some(input) = base_analysis_rx.blocking_recv() {
             let demo_id = input.demoid;
             let result = backend::analysis::analyse_base(input);
@@ -47,8 +49,11 @@ async fn main() {
                     tracing::trace!(?store_info_query, "Store demo info query");
                     tracing::trace!(?update_process_info, "Update processing info query");
 
-                    store_info_query.execute(&mut db_con).await.unwrap();
-                    update_process_info.execute(&mut db_con).await.unwrap();
+                    db_con.transaction::<'_, '_, '_, _, diesel::result::Error, _>(|conn| Box::pin(async move {
+                        store_info_query.execute(conn).await.map(|e| ())?;
+                        update_process_info.execute(conn).await.map(|e| ())?;
+                        Ok(())
+                    })).await;
                 }
             );
         }

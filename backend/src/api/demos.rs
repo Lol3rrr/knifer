@@ -14,6 +14,7 @@ use crate::UserSession;
             .route("/list", axum::routing::get(list))
             .route("/upload", axum::routing::post(upload).layer(axum::extract::DefaultBodyLimit::max(500*1024*1024)))
             .route("/:id/info", axum::routing::get(info))
+            .route("/:id/reanalyse", axum::routing::get(analyise))
             .with_state(Arc::new(DemoState {
                 upload_folder: upload_folder.into(),
                 base_analysis,
@@ -73,6 +74,31 @@ use crate::UserSession;
         processing_query.execute(&mut db_con).await.unwrap();
 
         Ok(axum::response::Redirect::to("/"))
+    }
+
+    #[tracing::instrument(skip(state, session))]
+    async fn analyise(State(state): State<Arc<DemoState>>, session: crate::UserSession, Path(demo_id): Path<i64>) -> Result<(), (axum::http::StatusCode, &'static str)> {
+        let steam_id = session.data().steam_id.ok_or_else(|| (axum::http::StatusCode::UNAUTHORIZED, "Not logged in"))?;
+
+        tracing::info!("Upload for Session: {:?}", steam_id);
+
+    let mut db_con = crate::db_connection().await;
+
+    let query = crate::schema::demos::dsl::demos.filter(crate::schema::demos::dsl::steam_id.eq(steam_id.to_string())).filter(crate::schema::demos::dsl::demo_id.eq(demo_id));
+    let result: Vec<_> = query.load::<crate::models::Demo>(&mut db_con).await.unwrap();
+
+    if result.len() != 1 {
+        return Err((axum::http::StatusCode::BAD_REQUEST, "Expected exactly 1 demo to match"));
+    }
+
+    let user_folder = std::path::Path::new(&state.upload_folder).join(format!("{}/", steam_id));
+    state.base_analysis.send(crate::analysis::AnalysisInput {
+        path: user_folder.join(format!("{}.dem", demo_id)),
+        demoid: demo_id,
+        steamid: steam_id.to_string(),
+    });
+
+    Ok(())
     }
 
     #[tracing::instrument(skip(session))]
