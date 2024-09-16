@@ -5,12 +5,19 @@ use crate::DemoUploadStatus;
 
 #[leptos::component]
 fn steam_login(height: &'static str, width: &'static str) -> impl leptos::IntoView {
-    let user_status = create_resource(|| (), |_| async move {
-        let res = reqwasm::http::Request::get("/api/user/status").send().await.unwrap();
-        res.json::<common::UserStatus>().await.map_err(|e| ())
-    });
+    let user_status = create_resource(
+        || (),
+        |_| async move {
+            let res = reqwasm::http::Request::get("/api/user/status")
+                .send()
+                .await
+                .unwrap();
+            res.json::<common::UserStatus>().await.map_err(|e| ())
+        },
+    );
 
-    let tmp = move || match user_status.get() {
+    let tmp = move || {
+        match user_status.get() {
         Some(Ok(user)) => 
             view! {
                 <p>{user.name}</p>
@@ -21,6 +28,7 @@ fn steam_login(height: &'static str, width: &'static str) -> impl leptos::IntoVi
                 <img src="https://community.akamai.steamstatic.com/public/images/signinthroughsteam/sits_01.png" alt="Steam Login" style=format!("height: {height}; width: {width}") />
             </a>
         }.into_view(),
+    }
     };
 
     view! {
@@ -66,7 +74,7 @@ pub fn top_bar(update_demo_visible: WriteSignal<DemoUploadStatus>) -> impl lepto
             <A href="/">
                 <p class="logo">Knifer</p>
             </A>
-            
+
             <div class="elem" style="grid-column-start: 3">
                 <button on:click=move |_| update_demo_visible(DemoUploadStatus::Shown)>
                     Upload Demo

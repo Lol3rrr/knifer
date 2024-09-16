@@ -6,21 +6,25 @@ use diesel_async::RunQueryDsl;
 #[derive(Debug, Clone)]
 pub struct DieselStore {}
 
-static EXPIRY_FORMAT: std::sync::LazyLock<&[time::format_description::BorrowedFormatItem<'static>]> = std::sync::LazyLock::new(|| {
-        time::macros::format_description!(
+static EXPIRY_FORMAT: std::sync::LazyLock<
+    &[time::format_description::BorrowedFormatItem<'static>],
+> = std::sync::LazyLock::new(|| {
+    time::macros::format_description!(
             "[year]-[month]-[day] [hour]:[minute]:[second] [offset_hour sign:mandatory]:[offset_minute]:[offset_second]"
         )
-    });
+});
 
 impl DieselStore {
-
     pub fn new() -> Self {
         Self {}
     }
 
     fn id_to_bytes(&self, val: i128) -> Vec<i64> {
         let id_bytes = val.to_be_bytes();
-        vec![i64::from_be_bytes((id_bytes[0..8]).try_into().unwrap()), i64::from_be_bytes((id_bytes[8..16]).try_into().unwrap())]
+        vec![
+            i64::from_be_bytes((id_bytes[0..8]).try_into().unwrap()),
+            i64::from_be_bytes((id_bytes[8..16]).try_into().unwrap()),
+        ]
     }
     fn bytes_to_id(&self, val: Vec<i64>) -> i128 {
         assert_eq!(2, val.len());
@@ -28,7 +32,10 @@ impl DieselStore {
         let fb = val[0].to_be_bytes();
         let sb = val[1].to_be_bytes();
 
-        i128::from_be_bytes([fb[0], fb[1], fb[2], fb[3], fb[4], fb[5], fb[6], fb[7], sb[0], sb[1], sb[2], sb[3], sb[4], sb[5], sb[6], sb[7]])
+        i128::from_be_bytes([
+            fb[0], fb[1], fb[2], fb[3], fb[4], fb[5], fb[6], fb[7], sb[0], sb[1], sb[2], sb[3],
+            sb[4], sb[5], sb[6], sb[7],
+        ])
     }
 
     fn expiry_to_string(&self, expiry_date: &time::OffsetDateTime) -> String {
@@ -41,15 +48,22 @@ impl DieselStore {
 
 #[async_trait::async_trait]
 impl tower_sessions::SessionStore for DieselStore {
-    async fn save(&self,session_record: &tower_sessions::session::Record) ->  tower_sessions::session_store::Result<()> { 
+    async fn save(
+        &self,
+        session_record: &tower_sessions::session::Record,
+    ) -> tower_sessions::session_store::Result<()> {
         let db_id = session_record.id.0.to_string();
 
         let data = serde_json::to_value(&session_record.data).unwrap();
         let expiry_date = self.expiry_to_string(&session_record.expiry_date);
 
-        let steamid = session_record.data.get(crate::UserSession::KEY).map(|e| serde_json::from_value::<crate::UserSessionData>(e.clone()).ok()).flatten().map(|d| {
-            d.steam_id.map(|s| s.to_string())
-        }).flatten();
+        let steamid = session_record
+            .data
+            .get(crate::UserSession::KEY)
+            .map(|e| serde_json::from_value::<crate::UserSessionData>(e.clone()).ok())
+            .flatten()
+            .map(|d| d.steam_id.map(|s| s.to_string()))
+            .flatten();
 
         let query = diesel::dsl::insert_into(crate::schema::sessions::dsl::sessions)
             .values(crate::models::Session {
@@ -59,7 +73,10 @@ impl tower_sessions::SessionStore for DieselStore {
             })
             .on_conflict(crate::schema::sessions::dsl::id)
             .do_update()
-            .set((crate::schema::sessions::dsl::steamid.eq(steamid), crate::schema::sessions::dsl::expiry_date.eq(expiry_date)));
+            .set((
+                crate::schema::sessions::dsl::steamid.eq(steamid),
+                crate::schema::sessions::dsl::expiry_date.eq(expiry_date),
+            ));
 
         let mut connection = crate::db_connection().await;
 
@@ -68,10 +85,14 @@ impl tower_sessions::SessionStore for DieselStore {
         Ok(())
     }
 
-    async fn load(&self,session_id: &tower_sessions::session::Id) ->  tower_sessions::session_store::Result<Option<tower_sessions::session::Record>> {
+    async fn load(
+        &self,
+        session_id: &tower_sessions::session::Id,
+    ) -> tower_sessions::session_store::Result<Option<tower_sessions::session::Record>> {
         let db_id = session_id.0.to_string();
 
-        let query = crate::schema::sessions::dsl::sessions.filter(crate::schema::sessions::dsl::id.eq(db_id));
+        let query = crate::schema::sessions::dsl::sessions
+            .filter(crate::schema::sessions::dsl::id.eq(db_id));
 
         let mut connection = crate::db_connection().await;
 
@@ -79,7 +100,9 @@ impl tower_sessions::SessionStore for DieselStore {
 
         if result.len() > 1 {
             tracing::error!("Found more than 1 result");
-            return Err(tower_sessions::session_store::Error::Backend("Found more than 1 result".to_string()));
+            return Err(tower_sessions::session_store::Error::Backend(
+                "Found more than 1 result".to_string(),
+            ));
         }
 
         if result.is_empty() {
@@ -90,9 +113,13 @@ impl tower_sessions::SessionStore for DieselStore {
 
         let data = {
             let mut tmp = HashMap::<String, _>::new();
-            tmp.insert(crate::UserSession::KEY.to_string(), serde_json::to_value(&crate::UserSessionData {
-                steam_id: result.steamid.map(|s| s.parse().ok()).flatten(),
-            }).unwrap());
+            tmp.insert(
+                crate::UserSession::KEY.to_string(),
+                serde_json::to_value(&crate::UserSessionData {
+                    steam_id: result.steamid.map(|s| s.parse().ok()).flatten(),
+                })
+                .unwrap(),
+            );
             tmp
         };
 
@@ -103,13 +130,20 @@ impl tower_sessions::SessionStore for DieselStore {
         }))
     }
 
-    async fn delete(&self,session_id: &tower_sessions::session::Id) -> tower_sessions::session_store::Result<()> {
+    async fn delete(
+        &self,
+        session_id: &tower_sessions::session::Id,
+    ) -> tower_sessions::session_store::Result<()> {
         let db_id = session_id.0.to_string();
 
-        let query = crate::schema::sessions::dsl::sessions.filter(crate::schema::sessions::dsl::id.eq(db_id));
+        let query = crate::schema::sessions::dsl::sessions
+            .filter(crate::schema::sessions::dsl::id.eq(db_id));
 
         let mut connection = crate::db_connection().await;
-        diesel::dsl::delete(query).execute(&mut connection).await.unwrap();
+        diesel::dsl::delete(query)
+            .execute(&mut connection)
+            .await
+            .unwrap();
 
         Ok(())
     }

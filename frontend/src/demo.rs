@@ -6,16 +6,20 @@ pub fn demo() -> impl leptos::IntoView {
     let params = leptos_router::use_params_map();
     let id = move || params.with(|params| params.get("id").cloned().unwrap_or_default());
 
-    let demo_info = create_resource(|| (), move |_| async move {
-        let res = reqwasm::http::Request::get(&format!("/api/demos/{}/info", id())).send().await.unwrap();
-        res.json::<common::DemoInfo>().await.unwrap()
-    });
+    let demo_info = create_resource(
+        || (),
+        move |_| async move {
+            let res = reqwasm::http::Request::get(&format!("/api/demos/{}/info", id()))
+                .send()
+                .await
+                .unwrap();
+            res.json::<common::DemoInfo>().await.unwrap()
+        },
+    );
 
-    let map = move || {
-        match demo_info.get() {
-            Some(v) => v.map.clone(),
-            None => String::new(),
-        }
+    let map = move || match demo_info.get() {
+        Some(v) => v.map.clone(),
+        None => String::new(),
     };
 
     let selected_tab = move || {
@@ -24,7 +28,7 @@ pub fn demo() -> impl leptos::IntoView {
         let trailing = loc_path.split('/').last();
         trailing.unwrap_or("/").to_owned()
     };
-    
+
     let style = stylers::style! {
         "Demo",
         .analysis_bar {

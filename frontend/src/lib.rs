@@ -25,7 +25,10 @@ pub fn demo_list_entry(demo: common::BaseDemoInfo) -> impl leptos::IntoView {
 }
 
 #[leptos::component]
-pub fn upload_demo(shown: ReadSignal<DemoUploadStatus>, update_shown: WriteSignal<DemoUploadStatus>) -> impl leptos::IntoView {
+pub fn upload_demo(
+    shown: ReadSignal<DemoUploadStatus>,
+    update_shown: WriteSignal<DemoUploadStatus>,
+) -> impl leptos::IntoView {
     use leptos_router::Form;
 
     let style = stylers::style! {
@@ -69,11 +72,17 @@ pub fn upload_demo(shown: ReadSignal<DemoUploadStatus>, update_shown: WriteSigna
 
 #[leptos::component]
 pub fn homepage() -> impl leptos::IntoView {
-    let demo_data = create_resource(|| (), |_| async move {
-        let res = reqwasm::http::Request::get("/api/demos/list").send().await.unwrap();
-        let demos: Vec<common::BaseDemoInfo> = res.json().await.unwrap();
-        demos
-    });
+    let demo_data = create_resource(
+        || (),
+        |_| async move {
+            let res = reqwasm::http::Request::get("/api/demos/list")
+                .send()
+                .await
+                .unwrap();
+            let demos: Vec<common::BaseDemoInfo> = res.json().await.unwrap();
+            demos
+        },
+    );
 
     view! {
         <div>

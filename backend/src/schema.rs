@@ -39,10 +39,4 @@ diesel::table! {
 diesel::joinable!(demo_info -> demos (demo_id));
 diesel::joinable!(processing_status -> demos (demo_id));
 
-diesel::allow_tables_to_appear_in_same_query!(
-    demo_info,
-    demos,
-    processing_status,
-    sessions,
-    users,
-);
+diesel::allow_tables_to_appear_in_same_query!(demo_info, demos, processing_status, sessions, users,);

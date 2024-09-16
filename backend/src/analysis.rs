@@ -10,17 +10,15 @@ pub struct AnalysisInput {
 #[derive(Debug)]
 pub struct BaseInfo {
     pub map: String,
-    pub players: Vec<()>
+    pub players: Vec<()>,
 }
 
 #[tracing::instrument(skip(input))]
 pub fn analyse_base(input: AnalysisInput) -> BaseInfo {
     tracing::info!("Performing Base analysis");
 
-
     let file = std::fs::File::open(&input.path).unwrap();
     let mmap = unsafe { memmap2::MmapOptions::new().map(&file).unwrap() };
-    
 
     let tmp = csdemo::Container::parse(&mmap).unwrap();
     let output = csdemo::parser::parse(csdemo::FrameIterator::parse(tmp.inner)).unwrap();
@@ -85,6 +83,6 @@ pub fn analyse_base(input: AnalysisInput) -> BaseInfo {
 
     BaseInfo {
         map,
-        players: Vec::new()
+        players: Vec::new(),
     }
 }

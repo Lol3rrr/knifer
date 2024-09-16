@@ -2,7 +2,8 @@ use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
 
 static UPLOAD_FOLDER: &str = "uploads/";
 
-const MIGRATIONS: diesel_async_migrations::EmbeddedMigrations = diesel_async_migrations::embed_migrations!("../migrations/");
+const MIGRATIONS: diesel_async_migrations::EmbeddedMigrations =
+    diesel_async_migrations::embed_migrations!("../migrations/");
 
 async fn run_migrations(connection: &mut diesel_async::AsyncPgConnection) {
     MIGRATIONS.run_pending_migrations(connection).await.unwrap();
@@ -23,7 +24,8 @@ async fn main() {
     run_migrations(&mut backend::db_connection().await).await;
     tracing::info!("Completed Migrations");
 
-    let (base_analysis_tx, base_analysis_rx) = tokio::sync::mpsc::unbounded_channel::<backend::analysis::AnalysisInput>();
+    let (base_analysis_tx, base_analysis_rx) =
+        tokio::sync::mpsc::unbounded_channel::<backend::analysis::AnalysisInput>();
 
     let mut component_set = tokio::task::JoinSet::new();
 
