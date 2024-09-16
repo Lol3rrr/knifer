@@ -95,6 +95,8 @@ async fn upload(
 
     let mut db_con = crate::db_connection().await;
 
+    // Turn all of this into a single transaction
+
     let query =
         diesel::dsl::insert_into(crate::schema::demos::dsl::demos).values(crate::models::Demo {
             demo_id,
@@ -102,11 +104,14 @@ async fn upload(
         });
     query.execute(&mut db_con).await.unwrap();
 
-    state.base_analysis.send(crate::analysis::AnalysisInput {
-        steamid: steam_id.to_string(),
-        demoid: demo_id,
-        path: demo_file_path,
-    });
+    state
+        .base_analysis
+        .send(crate::analysis::AnalysisInput {
+            steamid: steam_id.to_string(),
+            demoid: demo_id,
+            path: demo_file_path,
+        })
+        .unwrap();
     let processing_query =
         diesel::dsl::insert_into(crate::schema::processing_status::dsl::processing_status)
             .values(crate::models::ProcessingStatus { demo_id, info: 0 });
@@ -146,18 +151,21 @@ async fn analyise(
     }
 
     let user_folder = std::path::Path::new(&state.upload_folder).join(format!("{}/", steam_id));
-    state.base_analysis.send(crate::analysis::AnalysisInput {
-        path: user_folder.join(format!("{}.dem", demo_id)),
-        demoid: demo_id,
-        steamid: steam_id.to_string(),
-    });
+    state
+        .base_analysis
+        .send(crate::analysis::AnalysisInput {
+            path: user_folder.join(format!("{}.dem", demo_id)),
+            demoid: demo_id,
+            steamid: steam_id.to_string(),
+        })
+        .unwrap();
 
     Ok(())
 }
 
-#[tracing::instrument(skip(session))]
+#[tracing::instrument(skip(_session))]
 async fn info(
-    session: UserSession,
+    _session: UserSession,
     Path(demo_id): Path<i64>,
 ) -> Result<axum::response::Json<common::DemoInfo>, axum::http::StatusCode> {
     tracing::info!("Get info for Demo: {:?}", demo_id);

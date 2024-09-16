@@ -19,25 +19,6 @@ impl DieselStore {
         Self {}
     }
 
-    fn id_to_bytes(&self, val: i128) -> Vec<i64> {
-        let id_bytes = val.to_be_bytes();
-        vec![
-            i64::from_be_bytes((id_bytes[0..8]).try_into().unwrap()),
-            i64::from_be_bytes((id_bytes[8..16]).try_into().unwrap()),
-        ]
-    }
-    fn bytes_to_id(&self, val: Vec<i64>) -> i128 {
-        assert_eq!(2, val.len());
-
-        let fb = val[0].to_be_bytes();
-        let sb = val[1].to_be_bytes();
-
-        i128::from_be_bytes([
-            fb[0], fb[1], fb[2], fb[3], fb[4], fb[5], fb[6], fb[7], sb[0], sb[1], sb[2], sb[3],
-            sb[4], sb[5], sb[6], sb[7],
-        ])
-    }
-
     fn expiry_to_string(&self, expiry_date: &time::OffsetDateTime) -> String {
         expiry_date.format(&EXPIRY_FORMAT).unwrap()
     }
@@ -54,7 +35,6 @@ impl tower_sessions::SessionStore for DieselStore {
     ) -> tower_sessions::session_store::Result<()> {
         let db_id = session_record.id.0.to_string();
 
-        let data = serde_json::to_value(&session_record.data).unwrap();
         let expiry_date = self.expiry_to_string(&session_record.expiry_date);
 
         let steamid = session_record
