@@ -155,7 +155,6 @@ pub struct RouterConfig {
 }
 
 pub fn router(
-    base_analysis: tokio::sync::mpsc::UnboundedSender<crate::analysis::AnalysisInput>,
     config: RouterConfig,
 ) -> axum::Router {
     axum::Router::new()
@@ -167,6 +166,6 @@ pub fn router(
                 config.steam_api_key,
             ),
         )
-        .nest("/demos/", demos::router(config.upload_dir, base_analysis))
+        .nest("/demos/", demos::router(config.upload_dir))
         .nest("/user/", user::router())
 }

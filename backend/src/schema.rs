@@ -1,6 +1,14 @@
 // @generated automatically by Diesel CLI.
 
 diesel::table! {
+    analysis_queue (demo_id) {
+        demo_id -> Int8,
+        steam_id -> Text,
+        created_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     demo_info (demo_id) {
         demo_id -> Int8,
         map -> Text,
@@ -36,7 +44,15 @@ diesel::table! {
     }
 }
 
+diesel::joinable!(analysis_queue -> demos (demo_id));
 diesel::joinable!(demo_info -> demos (demo_id));
 diesel::joinable!(processing_status -> demos (demo_id));
 
-diesel::allow_tables_to_appear_in_same_query!(demo_info, demos, processing_status, sessions, users,);
+diesel::allow_tables_to_appear_in_same_query!(
+    analysis_queue,
+    demo_info,
+    demos,
+    processing_status,
+    sessions,
+    users,
+);

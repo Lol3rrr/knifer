@@ -1,5 +1,44 @@
 use std::path::PathBuf;
 
+use diesel::prelude::*;
+use diesel_async::RunQueryDsl;
+
+pub async fn poll_next_task(upload_folder: &std::path::Path, db_con: &mut diesel_async::pg::AsyncPgConnection) -> Result<AnalysisInput, ()> {
+    let query = crate::schema::analysis_queue::dsl::analysis_queue.order(crate::schema::analysis_queue::dsl::created_at.asc()).limit(1).select(crate::models::AnalysisTask::as_select()).for_update().skip_locked();
+
+    loop {
+        let result = db_con.build_transaction().run::<'_, _, diesel::result::Error, _>(|conn| Box::pin(async move {
+            let mut results: Vec<crate::models::AnalysisTask> = query.load(conn).await?;
+            let final_result = match results.pop() {
+                Some(r) => r,
+                None => return Ok(None),
+            };
+
+            let delete_query = diesel::dsl::delete(crate::schema::analysis_queue::dsl::analysis_queue).filter(crate::schema::analysis_queue::dsl::demo_id.eq(final_result.demo_id)).filter(crate::schema::analysis_queue::dsl::steam_id.eq(final_result.steam_id.clone()));
+            delete_query.execute(conn).await?;
+
+            Ok(Some(final_result))
+        })).await;
+
+        match result {
+            Ok(Some(r)) => {
+                return Ok(AnalysisInput {
+                    path: upload_folder.join(&r.steam_id).join(format!("{}.dem", r.demo_id)),
+                    steamid: r.steam_id,
+                    demoid: r.demo_id,
+                });
+            }
+            Ok(None) => {
+                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+            }
+            Err(e) => {
+                tracing::error!("Getting Task from Postgres: {:?}", e);
+                return Err(());
+            }
+        };
+    }
+}
+
 #[derive(Debug)]
 pub struct AnalysisInput {
     pub steamid: String,

@@ -38,9 +38,6 @@ async fn main() {
     run_migrations(&mut backend::db_connection().await).await;
     tracing::info!("Completed Migrations");
 
-    let (base_analysis_tx, base_analysis_rx) =
-        tokio::sync::mpsc::unbounded_channel::<backend::analysis::AnalysisInput>();
-
     let mut component_set = tokio::task::JoinSet::new();
 
     if args.api {
@@ -54,12 +51,11 @@ async fn main() {
 
         component_set.spawn(backend::run_api(
             args.upload_folder.clone(),
-            base_analysis_tx,
             steam_api_key,
         ));
     }
     if args.analysis {
-        component_set.spawn(backend::run_analysis(base_analysis_rx));
+        component_set.spawn(backend::run_analysis(args.upload_folder.clone()));
     }
 
     component_set.join_all().await;

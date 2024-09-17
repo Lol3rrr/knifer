@@ -43,10 +43,9 @@ pub async fn get_demo_from_upload(
 pub mod api;
 pub mod steam_api;
 
-#[tracing::instrument(skip(upload_folder, base_analysis_tx, steam_api_key))]
+#[tracing::instrument(skip(upload_folder, steam_api_key))]
 pub async fn run_api(
     upload_folder: impl Into<std::path::PathBuf>,
-    base_analysis_tx: tokio::sync::mpsc::UnboundedSender<analysis::AnalysisInput>,
     steam_api_key: impl Into<String>,
 ) {
     let upload_folder: std::path::PathBuf = upload_folder.into();
@@ -66,10 +65,10 @@ pub async fn run_api(
         .nest(
             "/api/",
             crate::api::router(
-                base_analysis_tx,
                 crate::api::RouterConfig {
                     steam_api_key: steam_api_key.into(),
-                    steam_callback_base_url: "http://192.168.0.156:3000".into(),
+                    // steam_callback_base_url: "http://192.168.0.156:3000".into(),
+                    steam_callback_base_url: "http://localhost:3000".into(),
                     steam_callback_path: "/api/steam/callback".into(),
                     upload_dir: upload_folder.clone(),
                 },
@@ -85,14 +84,26 @@ pub async fn run_api(
     axum::serve(listener, router).await.unwrap();
 }
 
-#[tracing::instrument(skip(base_analysis_rx))]
+#[tracing::instrument(skip(upload_folder))]
 pub async fn run_analysis(
-    mut base_analysis_rx: tokio::sync::mpsc::UnboundedReceiver<analysis::AnalysisInput>,
+    upload_folder: impl Into<std::path::PathBuf>
 ) {
     use diesel::prelude::*;
     use diesel_async::{AsyncConnection, RunQueryDsl};
 
-    while let Some(input) = base_analysis_rx.recv().await {
+    let upload_folder: std::path::PathBuf = upload_folder.into();
+
+    
+    loop {
+        let mut db_con = db_connection().await;
+        let input = match crate::analysis::poll_next_task(&upload_folder, &mut db_con).await {
+            Ok(i) => i,
+            Err(e) => {
+                tracing::error!("Polling for next Task: {:?}", e);
+                break;
+            }
+        };
+
         let demo_id = input.demoid;
 
         let result = tokio::task::spawn_blocking(move || crate::analysis::analyse_base(input))
@@ -126,5 +137,8 @@ pub async fn run_analysis(
             })
             .await
             .unwrap();
+
+        // TODO
+        // Remove task from queue
     }
 }

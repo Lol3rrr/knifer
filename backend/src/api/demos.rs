@@ -6,12 +6,10 @@ use std::sync::Arc;
 
 struct DemoState {
     upload_folder: std::path::PathBuf,
-    base_analysis: tokio::sync::mpsc::UnboundedSender<crate::analysis::AnalysisInput>,
 }
 
 pub fn router<P>(
     upload_folder: P,
-    base_analysis: tokio::sync::mpsc::UnboundedSender<crate::analysis::AnalysisInput>,
 ) -> axum::Router
 where
     P: Into<std::path::PathBuf>,
@@ -27,7 +25,6 @@ where
         .route("/:id/reanalyse", axum::routing::get(analyise))
         .with_state(Arc::new(DemoState {
             upload_folder: upload_folder.into(),
-            base_analysis,
         }))
 }
 
@@ -104,14 +101,12 @@ async fn upload(
         });
     query.execute(&mut db_con).await.unwrap();
 
-    state
-        .base_analysis
-        .send(crate::analysis::AnalysisInput {
-            steamid: steam_id.to_string(),
-            demoid: demo_id,
-            path: demo_file_path,
-        })
-        .unwrap();
+    let queue_query = diesel::dsl::insert_into(crate::schema::analysis_queue::dsl::analysis_queue).values(crate::models::AddAnalysisTask {
+        demo_id,
+        steam_id: steam_id.to_string(),
+    });
+    queue_query.execute(&mut db_con).await.unwrap();
+
     let processing_query =
         diesel::dsl::insert_into(crate::schema::processing_status::dsl::processing_status)
             .values(crate::models::ProcessingStatus { demo_id, info: 0 });
@@ -120,9 +115,8 @@ async fn upload(
     Ok(axum::response::Redirect::to("/"))
 }
 
-#[tracing::instrument(skip(state, session))]
+#[tracing::instrument(skip(session))]
 async fn analyise(
-    State(state): State<Arc<DemoState>>,
     session: crate::UserSession,
     Path(demo_id): Path<i64>,
 ) -> Result<(), (axum::http::StatusCode, &'static str)> {
@@ -150,15 +144,11 @@ async fn analyise(
         ));
     }
 
-    let user_folder = std::path::Path::new(&state.upload_folder).join(format!("{}/", steam_id));
-    state
-        .base_analysis
-        .send(crate::analysis::AnalysisInput {
-            path: user_folder.join(format!("{}.dem", demo_id)),
-            demoid: demo_id,
-            steamid: steam_id.to_string(),
-        })
-        .unwrap();
+    let queue_query = diesel::dsl::insert_into(crate::schema::analysis_queue::dsl::analysis_queue).values(crate::models::AddAnalysisTask {
+        demo_id,
+        steam_id: steam_id.to_string(),
+    });
+    queue_query.execute(&mut db_con).await.unwrap();
 
     Ok(())
 }

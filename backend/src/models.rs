@@ -40,3 +40,19 @@ pub struct ProcessingStatus {
     pub demo_id: i64,
     pub info: i16,
 }
+
+#[derive(Insertable, Debug)]
+#[diesel(table_name = crate::schema::analysis_queue)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct AddAnalysisTask {
+    pub demo_id: i64,
+    pub steam_id: String,
+}
+
+#[derive(Queryable, Selectable, Debug)]
+#[diesel(table_name = crate::schema::analysis_queue)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct AnalysisTask {
+    pub demo_id: i64,
+    pub steam_id: String,
+}
