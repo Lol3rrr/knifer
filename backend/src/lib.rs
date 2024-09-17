@@ -114,23 +114,49 @@ pub async fn run_analysis(
 
         let mut db_con = crate::db_connection().await;
 
-        let store_info_query = diesel::dsl::insert_into(crate::schema::demo_info::dsl::demo_info)
-            .values(crate::models::DemoInfo {
+        let (player_info, player_stats): (Vec<_>, Vec<_>) = result.players.into_iter().map(|(info, stats)| {
+            (crate::models::DemoPlayer {
+                demo_id,
+                name: info.name,
+                steam_id: info.steam_id.clone(),
+                team: info.team as i16,
+                color: info.color as i16,
+            }, crate::models::DemoPlayerStats {
+                    demo_id,
+                    steam_id: info.steam_id,
+                    deaths: stats.deaths as i16,
+                    kills: stats.kills as i16,
+                })
+        }).unzip();
+
+        let demo_info = crate::models::DemoInfo {
                 demo_id,
                 map: result.map,
-            });
+            };
+
+        let store_demo_info_query = diesel::dsl::insert_into(crate::schema::demo_info::dsl::demo_info)
+            .values(&demo_info).on_conflict(crate::schema::demo_info::dsl::demo_id).do_update().set(crate::schema::demo_info::dsl::map.eq(diesel::upsert::excluded(crate::schema::demo_info::dsl::map)));
+        let store_demo_players_query = diesel::dsl::insert_into(crate::schema::demo_players::dsl::demo_players).values(player_info)
+            .on_conflict_do_nothing();
+        let store_demo_player_stats_query = diesel::dsl::insert_into(crate::schema::demo_player_stats::dsl::demo_player_stats)
+            .values(player_stats)
+            .on_conflict((crate::schema::demo_player_stats::dsl::demo_id, crate::schema::demo_player_stats::dsl::steam_id))
+            .do_update()
+            .set((
+                crate::schema::demo_player_stats::dsl::deaths.eq(diesel::upsert::excluded(crate::schema::demo_player_stats::dsl::deaths)),
+                crate::schema::demo_player_stats::dsl::kills.eq(diesel::upsert::excluded(crate::schema::demo_player_stats::dsl::kills)),
+            ));
         let update_process_info =
             diesel::dsl::update(crate::schema::processing_status::dsl::processing_status)
                 .set(crate::schema::processing_status::dsl::info.eq(1))
                 .filter(crate::schema::processing_status::dsl::demo_id.eq(demo_id));
 
-        tracing::trace!(?store_info_query, "Store demo info query");
-        tracing::trace!(?update_process_info, "Update processing info query");
-
         db_con
             .transaction::<'_, '_, '_, _, diesel::result::Error, _>(|conn| {
                 Box::pin(async move {
-                    store_info_query.execute(conn).await?;
+                    store_demo_info_query.execute(conn).await?;
+                    store_demo_players_query.execute(conn).await?;
+                    store_demo_player_stats_query.execute(conn).await?;
                     update_process_info.execute(conn).await?;
                     Ok(())
                 })

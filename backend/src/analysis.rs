@@ -49,7 +49,22 @@ pub struct AnalysisInput {
 #[derive(Debug)]
 pub struct BaseInfo {
     pub map: String,
-    pub players: Vec<()>,
+    pub players: Vec<(BasePlayerInfo, BasePlayerStats)>,
+}
+
+#[derive(Debug)]
+pub struct BasePlayerInfo {
+    pub name: String,
+    pub steam_id: String,
+    pub team: i32,
+    pub color: i32,
+    pub ingame_id: i32,
+}
+
+#[derive(Debug)]
+pub struct BasePlayerStats {
+    pub kills: usize,
+    pub deaths: usize,
 }
 
 #[tracing::instrument(skip(input))]
@@ -66,7 +81,7 @@ pub fn analyse_base(input: AnalysisInput) -> BaseInfo {
 
     tracing::info!("Header: {:?}", header);
 
-    dbg!(&output.player_info);
+    let mut player_stats = std::collections::HashMap::with_capacity(output.player_info.len());
 
     for event in output.events.iter() {
         match event {
@@ -76,52 +91,58 @@ pub fn analyse_base(input: AnalysisInput) -> BaseInfo {
             csdemo::DemoEvent::RankReveal(reveal) => {}
             csdemo::DemoEvent::GameEvent(gevent) => {
                 match gevent {
+                    csdemo::game_event::GameEvent::BeginNewMatch(_) => {
+                        player_stats.clear();
+                    }
                     csdemo::game_event::GameEvent::PlayerTeam(pteam) => {
-                        tracing::info!("{:?}", pteam);
+                        // tracing::info!("{:?}", pteam);
                     }
                     csdemo::game_event::GameEvent::RoundOfficiallyEnded(r_end) => {
-                        tracing::info!("{:?}", r_end);
+                        // tracing::info!("{:?}", r_end);
                     }
                     csdemo::game_event::GameEvent::PlayerDeath(pdeath) => {
-                        tracing::info!("{:?}", pdeath);
+                        // tracing::info!("{:?}", pdeath);
+
+                        let player_died_id = pdeath.userid.unwrap();
+
+                        let player_died = player_stats.entry(player_died_id).or_insert(BasePlayerStats {
+                            kills: 0,
+                            deaths: 0,
+                        });
+                        player_died.deaths += 1;
+
+                        if let Some(attacker_id) = pdeath.attacker {
+                            let attacker = player_stats.entry(attacker_id).or_insert(BasePlayerStats {
+                                kills: 0,
+                                deaths: 0,
+                            });
+                            attacker.kills += 1;
+
+                            // tracing::trace!("{:?} killed {:?}", attacker_id, player_died_id);
+                        }
                     }
                     other => {}
                 };
             }
         };
-
-        /*
-        match event.name.as_str() {
-            "team_info" => {
-                tracing::info!("Team Info: {:?}", event);
-            }
-            "player_spawn" => {
-                // tracing::info!("Player Spawn: {:?}", event);
-            }
-            "team_score" => {
-                tracing::info!("Team Score: {:?}", event);
-            }
-            "game_end" => {
-                tracing::info!("Game End: {:?}", event);
-            }
-            "match_end_conditions" => {
-                tracing::info!("Match End Conditions: {:?}", event);
-            }
-            "switch_team" => {
-                tracing::info!("Switch Team: {:?}", event);
-            }
-            "player_given_c4" => {
-                tracing::info!("Player Given C4: {:?}", event);
-            }
-            _ => {}
-        };
-        */
     }
+
+    let players: Vec<_> = player_stats.into_iter().filter_map(|(id, stats)| {
+        let player = output.player_info.get(&id)?;
+        
+        Some((BasePlayerInfo {
+            name: player.name.clone(),
+            steam_id: player.xuid.to_string(),
+            team: player.team,
+            color: player.color,
+            ingame_id: id.0,
+        }, stats))
+    }).collect();
 
     let map = header.map_name().to_owned();
 
     BaseInfo {
         map,
-        players: Vec::new(),
+        players,
     }
 }

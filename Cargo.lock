@@ -307,9 +307,9 @@ checksum = "8b96ec4966b5813e2c0507c1f86115c8c5abaadc3980879c3424042a02fd1ad3"
 
 [[package]]
 name = "cc"
-version = "1.1.19"
+version = "1.1.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d74707dde2ba56f86ae90effb3b43ddd369504387e718014de010cec7959800"
+checksum = "45bcde016d64c21da4be18b655631e5ab6d3107607e71a73a9f53eb48aae23fb"
 dependencies = [
  "shlex",
 ]
@@ -504,7 +504,7 @@ dependencies = [
 [[package]]
 name = "csdemo"
 version = "0.1.0"
-source = "git+https://github.com/Lol3rrr/csdemo.git#4417b263a0c04ceb32e199e67dd790adf4645277"
+source = "git+https://github.com/Lol3rrr/csdemo.git#c5237af33bc892437cf7b8658de34d7dad8947a0"
 dependencies = [
  "bitter",
  "phf",
@@ -3059,9 +3059,9 @@ dependencies = [
 
 [[package]]
 name = "toml_edit"
-version = "0.22.20"
+version = "0.22.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "583c44c02ad26b0c3f3066fe629275e50627026c51ac2e595cca4c230ce1ce1d"
+checksum = "3b072cee73c449a636ffd6f32bd8de3a9f7119139aff882f44943ce2986dc5cf"
 dependencies = [
  "indexmap",
  "serde",
