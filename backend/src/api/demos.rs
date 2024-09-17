@@ -22,6 +22,7 @@ where
                 .layer(axum::extract::DefaultBodyLimit::max(500 * 1024 * 1024)),
         )
         .route("/:id/info", axum::routing::get(info))
+        .route("/:id/analysis/scoreboard", axum::routing::get(scoreboard))
         .route("/:id/reanalyse", axum::routing::get(analyise))
         .with_state(Arc::new(DemoState {
             upload_folder: upload_folder.into(),
@@ -176,5 +177,46 @@ async fn info(
     Ok(axum::Json(common::DemoInfo {
         id: result.demo_id,
         map: result.map,
+    }))
+}
+
+#[tracing::instrument(skip(session))]
+async fn scoreboard(session: UserSession, Path(demo_id): Path<i64>) -> Result<axum::response::Json<common::demo_analysis::ScoreBoard>, axum::http::StatusCode> {
+    let query = crate::schema::demo_players::dsl::demo_players
+        .inner_join(crate::schema::demo_player_stats::dsl::demo_player_stats.on(crate::schema::demo_players::dsl::demo_id.eq(crate::schema::demo_player_stats::dsl::demo_id).and(crate::schema::demo_players::dsl::steam_id.eq(crate::schema::demo_player_stats::dsl::steam_id))))
+        .filter(crate::schema::demo_players::dsl::demo_id.eq(demo_id));
+
+    let mut db_con = crate::db_connection().await;
+    
+    let response: Vec<(crate::models::DemoPlayer, crate::models::DemoPlayerStats)> = match query.load(&mut db_con).await {
+        Ok(d) => d,
+        Err(e) => {
+            tracing::error!("Querying DB: {:?}", e);
+            return Err(axum::http::StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    };
+
+    if response.is_empty() {
+        tracing::error!("DB Response was empty");
+        return Err(axum::http::StatusCode::INTERNAL_SERVER_ERROR);
+    }
+
+    let team1_number: i16 = response.last().map(|(p, _)| p.team).unwrap();
+
+    let mut team1 = Vec::new();
+    let mut team2 = Vec::new();
+    for (player, stats) in response {
+        let team_vec = if player.team == team1_number { &mut team1 } else { &mut team2 };
+
+        team_vec.push(common::demo_analysis::ScoreBoardPlayer {
+            name: player.name,
+            kills: stats.kills as usize,
+            deaths: stats.deaths as usize,
+        });
+    }
+
+    Ok(axum::Json(common::demo_analysis::ScoreBoard {
+        team1,
+        team2,
     }))
 }

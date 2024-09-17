@@ -15,3 +15,18 @@ pub struct DemoInfo {
     pub id: i64,
     pub map: String,
 }
+
+pub mod demo_analysis {
+    #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+    pub struct ScoreBoard {
+        pub team1: Vec<ScoreBoardPlayer>,
+        pub team2: Vec<ScoreBoardPlayer>,
+    }
+
+    #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+    pub struct ScoreBoardPlayer {
+        pub name: String,
+        pub kills: usize,
+        pub deaths: usize,
+    }
+}
