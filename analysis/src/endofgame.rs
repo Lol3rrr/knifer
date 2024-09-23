@@ -27,7 +27,7 @@ pub fn parse(buf: &[u8]) -> Result<EndOfGame, ()> {
     let tmp = csdemo::Container::parse(buf).map_err(|e| ())?;
     let output = csdemo::parser::parse(
         csdemo::FrameIterator::parse(tmp.inner),
-        csdemo::parser::EntityFilter::all(),
+        csdemo::parser::EntityFilter::disabled(),
     )
     .map_err(|e| ())?;
 
@@ -68,7 +68,7 @@ pub fn parse(buf: &[u8]) -> Result<EndOfGame, ()> {
                             &mut player_life,
                         );
                     }
-                    other => {}
+                    _ => {}
                 };
             }
             _ => {}
@@ -108,19 +108,24 @@ fn player_death(
 
     let player_died_player = player_info.get(&player_died_id).unwrap();
     let player_died = player_stats.entry(player_died_id).or_default();
+
+    let attacker_id = match death.attacker.filter(|p| p.0 < 10) {
+        Some(a) => a,
+        None => return,
+    };
+
     player_died.deaths += 1;
 
-    if let Some(attacker_id) = death.attacker.filter(|p| p.0 < 10) {
-        let attacker_player = player_info
-            .get(&attacker_id)
-            .expect(&format!("Attacker-ID: {:?}", attacker_id));
-        if attacker_player.team == player_died_player.team {
-            return;
-        } else {
-            let attacker = player_stats.entry(attacker_id).or_default();
-            attacker.kills += 1;
-        }
+    let attacker_player = player_info
+        .get(&attacker_id)
+        .expect(&format!("Attacker-ID: {:?}", attacker_id));
+    if attacker_player.team == player_died_player.team {
+        // return;
+    } else {
+        let attacker = player_stats.entry(attacker_id).or_default();
+        attacker.kills += 1;
     }
+
     if let Some(assist_id) = death.assister.filter(|p| p.0 < 10) {
         let assister_player = player_info
             .get(&assist_id)
