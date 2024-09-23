@@ -23,5 +23,7 @@ CREATE TABLE IF NOT EXISTS demo_player_stats (
   steam_id TEXT NOT NULL,
   kills int2 NOT NULL,
   deaths int2 NOT NULL,
+  damage int2 NOT NULL,
+  assists int2 NOT NULL,
   PRIMARY KEY (demo_id, steam_id)
 );

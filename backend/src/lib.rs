@@ -64,15 +64,13 @@ pub async fn run_api(
     let router = axum::Router::new()
         .nest(
             "/api/",
-            crate::api::router(
-                crate::api::RouterConfig {
-                    steam_api_key: steam_api_key.into(),
-                    // steam_callback_base_url: "http://192.168.0.156:3000".into(),
-                    steam_callback_base_url: "http://localhost:3000".into(),
-                    steam_callback_path: "/api/steam/callback".into(),
-                    upload_dir: upload_folder.clone(),
-                },
-            ),
+            crate::api::router(crate::api::RouterConfig {
+                steam_api_key: steam_api_key.into(),
+                steam_callback_base_url: "http://192.168.0.156:3000".into(),
+                // steam_callback_base_url: "http://localhost:3000".into(),
+                steam_callback_path: "/api/steam/callback".into(),
+                upload_dir: upload_folder.clone(),
+            }),
         )
         .layer(session_layer)
         .nest_service(
@@ -85,15 +83,12 @@ pub async fn run_api(
 }
 
 #[tracing::instrument(skip(upload_folder))]
-pub async fn run_analysis(
-    upload_folder: impl Into<std::path::PathBuf>
-) {
+pub async fn run_analysis(upload_folder: impl Into<std::path::PathBuf>) {
     use diesel::prelude::*;
     use diesel_async::{AsyncConnection, RunQueryDsl};
 
     let upload_folder: std::path::PathBuf = upload_folder.into();
 
-    
     loop {
         let mut db_con = db_connection().await;
         let input = match crate::analysis::poll_next_task(&upload_folder, &mut db_con).await {
@@ -114,38 +109,70 @@ pub async fn run_analysis(
 
         let mut db_con = crate::db_connection().await;
 
-        let (player_info, player_stats): (Vec<_>, Vec<_>) = result.players.into_iter().map(|(info, stats)| {
-            (crate::models::DemoPlayer {
-                demo_id,
-                name: info.name,
-                steam_id: info.steam_id.clone(),
-                team: info.team as i16,
-                color: info.color as i16,
-            }, crate::models::DemoPlayerStats {
-                    demo_id,
-                    steam_id: info.steam_id,
-                    deaths: stats.deaths as i16,
-                    kills: stats.kills as i16,
-                })
-        }).unzip();
+        let (player_info, player_stats): (Vec<_>, Vec<_>) = result
+            .players
+            .into_iter()
+            .map(|(info, stats)| {
+                (
+                    crate::models::DemoPlayer {
+                        demo_id,
+                        name: info.name,
+                        steam_id: info.steam_id.clone(),
+                        team: info.team as i16,
+                        color: info.color as i16,
+                    },
+                    crate::models::DemoPlayerStats {
+                        demo_id,
+                        steam_id: info.steam_id,
+                        deaths: stats.deaths as i16,
+                        kills: stats.kills as i16,
+                        damage: stats.damage as i16,
+                        assists: stats.assists as i16,
+                    },
+                )
+            })
+            .unzip();
 
         let demo_info = crate::models::DemoInfo {
-                demo_id,
-                map: result.map,
-            };
+            demo_id,
+            map: result.map,
+        };
 
-        let store_demo_info_query = diesel::dsl::insert_into(crate::schema::demo_info::dsl::demo_info)
-            .values(&demo_info).on_conflict(crate::schema::demo_info::dsl::demo_id).do_update().set(crate::schema::demo_info::dsl::map.eq(diesel::upsert::excluded(crate::schema::demo_info::dsl::map)));
-        let store_demo_players_query = diesel::dsl::insert_into(crate::schema::demo_players::dsl::demo_players).values(player_info)
-            .on_conflict_do_nothing();
-        let store_demo_player_stats_query = diesel::dsl::insert_into(crate::schema::demo_player_stats::dsl::demo_player_stats)
-            .values(player_stats)
-            .on_conflict((crate::schema::demo_player_stats::dsl::demo_id, crate::schema::demo_player_stats::dsl::steam_id))
-            .do_update()
-            .set((
-                crate::schema::demo_player_stats::dsl::deaths.eq(diesel::upsert::excluded(crate::schema::demo_player_stats::dsl::deaths)),
-                crate::schema::demo_player_stats::dsl::kills.eq(diesel::upsert::excluded(crate::schema::demo_player_stats::dsl::kills)),
-            ));
+        let store_demo_info_query =
+            diesel::dsl::insert_into(crate::schema::demo_info::dsl::demo_info)
+                .values(&demo_info)
+                .on_conflict(crate::schema::demo_info::dsl::demo_id)
+                .do_update()
+                .set(
+                    crate::schema::demo_info::dsl::map
+                        .eq(diesel::upsert::excluded(crate::schema::demo_info::dsl::map)),
+                );
+        let store_demo_players_query =
+            diesel::dsl::insert_into(crate::schema::demo_players::dsl::demo_players)
+                .values(player_info)
+                .on_conflict_do_nothing();
+        let store_demo_player_stats_query =
+            diesel::dsl::insert_into(crate::schema::demo_player_stats::dsl::demo_player_stats)
+                .values(player_stats)
+                .on_conflict((
+                    crate::schema::demo_player_stats::dsl::demo_id,
+                    crate::schema::demo_player_stats::dsl::steam_id,
+                ))
+                .do_update()
+                .set((
+                    crate::schema::demo_player_stats::dsl::deaths.eq(diesel::upsert::excluded(
+                        crate::schema::demo_player_stats::dsl::deaths,
+                    )),
+                    crate::schema::demo_player_stats::dsl::kills.eq(diesel::upsert::excluded(
+                        crate::schema::demo_player_stats::dsl::kills,
+                    )),
+                    crate::schema::demo_player_stats::dsl::assists.eq(diesel::upsert::excluded(
+                        crate::schema::demo_player_stats::dsl::assists,
+                    )),
+                    crate::schema::demo_player_stats::dsl::damage.eq(diesel::upsert::excluded(
+                        crate::schema::demo_player_stats::dsl::damage,
+                    )),
+                ));
         let update_process_info =
             diesel::dsl::update(crate::schema::processing_status::dsl::processing_status)
                 .set(crate::schema::processing_status::dsl::info.eq(1))

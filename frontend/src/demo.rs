@@ -17,6 +17,12 @@ pub fn demo() -> impl leptos::IntoView {
         },
     );
 
+    let rerun_analysis = create_action(move |_: &()| {
+        async move {
+            let _ = reqwasm::http::Request::get(&format!("/api/demos/{}/reanalyse", id())).send().await;
+        }
+    });
+
     let map = move || match demo_info.get() {
         Some(v) => v.map.clone(),
         None => String::new(),
@@ -58,6 +64,7 @@ pub fn demo() -> impl leptos::IntoView {
     view! {class = style,
         <h2>Demo - { id } - { map }</h2>
 
+        <button on:click=move |_| rerun_analysis.dispatch(())>Rerun analysis</button>
         <div class="analysis_bar">
             <div class="analysis_selector" class:current=move || selected_tab() == "scoreboard"><A href="scoreboard"><span>Scoreboard</span></A></div>
             <div class="analysis_selector" class:current=move || selected_tab() == "perround"><A href="perround"><span>Per Round</span></A></div>
@@ -72,26 +79,34 @@ pub fn demo() -> impl leptos::IntoView {
 pub fn scoreboard() -> impl leptos::IntoView {
     use leptos::Suspense;
 
-    let scoreboard_resource = create_resource(leptos_router::use_params_map(), |params| async move {
-        let id = params.get("id").unwrap();
+    let scoreboard_resource =
+        create_resource(leptos_router::use_params_map(), |params| async move {
+            let id = params.get("id").unwrap();
 
-        let res = reqwasm::http::Request::get(&format!("/api/demos/{}/analysis/scoreboard", id))
-                .send()
+            let res =
+                reqwasm::http::Request::get(&format!("/api/demos/{}/analysis/scoreboard", id))
+                    .send()
+                    .await
+                    .unwrap();
+            res.json::<common::demo_analysis::ScoreBoard>()
                 .await
-                .unwrap();
-        res.json::<common::demo_analysis::ScoreBoard>().await.unwrap()
-    });
+                .unwrap()
+        });
 
     let team_display_func = |team: &[common::demo_analysis::ScoreBoardPlayer]| {
-        team.iter().map(|player| {
-            view! {
-                <tr>
-                    <td> { player.name.clone() } </td>
-                    <td> { player.kills } </td>
-                    <td> { player.deaths } </td>
-                </tr>
-            }
-        }).collect::<Vec<_>>()
+        team.iter()
+            .map(|player| {
+                view! {
+                    <tr>
+                        <td> { player.name.clone() } </td>
+                        <td> { player.kills } </td>
+                        <td> { player.assists } </td>
+                        <td> { player.deaths } </td>
+                        <td> { player.damage } </td>
+                    </tr>
+                }
+            })
+            .collect::<Vec<_>>()
     };
 
     view! {
@@ -106,7 +121,9 @@ pub fn scoreboard() -> impl leptos::IntoView {
                     <tr>
                         <th>Name</th>
                         <th>Kills</th>
+                        <th>Assists</th>
                         <th>Deaths</th>
+                        <th>Damage</th>
                     </tr>
         {
             move || {
@@ -124,6 +141,10 @@ pub fn scoreboard() -> impl leptos::IntoView {
                 <table>
                     <tr>
                         <th>Name</th>
+                        <th>Kills</th>
+                        <th>Assists</th>
+                        <th>Deaths</th>
+                        <th>Damage</th>
                     </tr>
         {
             move || {

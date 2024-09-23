@@ -154,9 +154,7 @@ pub struct RouterConfig {
     pub upload_dir: std::path::PathBuf,
 }
 
-pub fn router(
-    config: RouterConfig,
-) -> axum::Router {
+pub fn router(config: RouterConfig) -> axum::Router {
     axum::Router::new()
         .nest(
             "/steam/",

@@ -49,10 +49,7 @@ async fn main() {
             }
         };
 
-        component_set.spawn(backend::run_api(
-            args.upload_folder.clone(),
-            steam_api_key,
-        ));
+        component_set.spawn(backend::run_api(args.upload_folder.clone(), steam_api_key));
     }
     if args.analysis {
         component_set.spawn(backend::run_analysis(args.upload_folder.clone()));

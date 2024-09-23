@@ -8,9 +8,7 @@ struct DemoState {
     upload_folder: std::path::PathBuf,
 }
 
-pub fn router<P>(
-    upload_folder: P,
-) -> axum::Router
+pub fn router<P>(upload_folder: P) -> axum::Router
 where
     P: Into<std::path::PathBuf>,
 {
@@ -102,10 +100,11 @@ async fn upload(
         });
     query.execute(&mut db_con).await.unwrap();
 
-    let queue_query = diesel::dsl::insert_into(crate::schema::analysis_queue::dsl::analysis_queue).values(crate::models::AddAnalysisTask {
-        demo_id,
-        steam_id: steam_id.to_string(),
-    });
+    let queue_query = diesel::dsl::insert_into(crate::schema::analysis_queue::dsl::analysis_queue)
+        .values(crate::models::AddAnalysisTask {
+            demo_id,
+            steam_id: steam_id.to_string(),
+        });
     queue_query.execute(&mut db_con).await.unwrap();
 
     let processing_query =
@@ -145,10 +144,11 @@ async fn analyise(
         ));
     }
 
-    let queue_query = diesel::dsl::insert_into(crate::schema::analysis_queue::dsl::analysis_queue).values(crate::models::AddAnalysisTask {
-        demo_id,
-        steam_id: steam_id.to_string(),
-    });
+    let queue_query = diesel::dsl::insert_into(crate::schema::analysis_queue::dsl::analysis_queue)
+        .values(crate::models::AddAnalysisTask {
+            demo_id,
+            steam_id: steam_id.to_string(),
+        });
     queue_query.execute(&mut db_con).await.unwrap();
 
     Ok(())
@@ -181,20 +181,33 @@ async fn info(
 }
 
 #[tracing::instrument(skip(session))]
-async fn scoreboard(session: UserSession, Path(demo_id): Path<i64>) -> Result<axum::response::Json<common::demo_analysis::ScoreBoard>, axum::http::StatusCode> {
+async fn scoreboard(
+    session: UserSession,
+    Path(demo_id): Path<i64>,
+) -> Result<axum::response::Json<common::demo_analysis::ScoreBoard>, axum::http::StatusCode> {
     let query = crate::schema::demo_players::dsl::demo_players
-        .inner_join(crate::schema::demo_player_stats::dsl::demo_player_stats.on(crate::schema::demo_players::dsl::demo_id.eq(crate::schema::demo_player_stats::dsl::demo_id).and(crate::schema::demo_players::dsl::steam_id.eq(crate::schema::demo_player_stats::dsl::steam_id))))
+        .inner_join(
+            crate::schema::demo_player_stats::dsl::demo_player_stats.on(
+                crate::schema::demo_players::dsl::demo_id
+                    .eq(crate::schema::demo_player_stats::dsl::demo_id)
+                    .and(
+                        crate::schema::demo_players::dsl::steam_id
+                            .eq(crate::schema::demo_player_stats::dsl::steam_id),
+                    ),
+            ),
+        )
         .filter(crate::schema::demo_players::dsl::demo_id.eq(demo_id));
 
     let mut db_con = crate::db_connection().await;
-    
-    let response: Vec<(crate::models::DemoPlayer, crate::models::DemoPlayerStats)> = match query.load(&mut db_con).await {
-        Ok(d) => d,
-        Err(e) => {
-            tracing::error!("Querying DB: {:?}", e);
-            return Err(axum::http::StatusCode::INTERNAL_SERVER_ERROR);
-        }
-    };
+
+    let response: Vec<(crate::models::DemoPlayer, crate::models::DemoPlayerStats)> =
+        match query.load(&mut db_con).await {
+            Ok(d) => d,
+            Err(e) => {
+                tracing::error!("Querying DB: {:?}", e);
+                return Err(axum::http::StatusCode::INTERNAL_SERVER_ERROR);
+            }
+        };
 
     if response.is_empty() {
         tracing::error!("DB Response was empty");
@@ -206,12 +219,18 @@ async fn scoreboard(session: UserSession, Path(demo_id): Path<i64>) -> Result<ax
     let mut team1 = Vec::new();
     let mut team2 = Vec::new();
     for (player, stats) in response {
-        let team_vec = if player.team == team1_number { &mut team1 } else { &mut team2 };
+        let team_vec = if player.team == team1_number {
+            &mut team1
+        } else {
+            &mut team2
+        };
 
         team_vec.push(common::demo_analysis::ScoreBoardPlayer {
             name: player.name,
             kills: stats.kills as usize,
             deaths: stats.deaths as usize,
+            damage: stats.damage as usize,
+            assists: stats.assists as usize,
         });
     }
 

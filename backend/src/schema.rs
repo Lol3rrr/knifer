@@ -21,6 +21,8 @@ diesel::table! {
         steam_id -> Text,
         kills -> Int2,
         deaths -> Int2,
+        damage -> Int2,
+        assists -> Int2,
     }
 }
 

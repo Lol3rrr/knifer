@@ -28,5 +28,7 @@ pub mod demo_analysis {
         pub name: String,
         pub kills: usize,
         pub deaths: usize,
+        pub damage: usize,
+        pub assists: usize,
     }
 }

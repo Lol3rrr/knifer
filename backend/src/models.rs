@@ -52,6 +52,8 @@ pub struct DemoPlayerStats {
     pub steam_id: String,
     pub kills: i16,
     pub deaths: i16,
+    pub damage: i16,
+    pub assists: i16,
 }
 
 #[derive(Queryable, Selectable, Insertable, Debug)]

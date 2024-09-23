@@ -1,0 +1,10 @@
+[package]
+name = "analysis"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+csdemo = { package = "csdemo", git = "https://github.com/Lol3rrr/csdemo.git", ref = "main" }
+
+[dev-dependencies]
+pretty_assertions = { version = "1.4" }

@@ -24,6 +24,7 @@ diesel_async_migrations = { version = "0.15" }
 reqwest = { version = "0.12", features = ["json"] }
 
 common = { path = "../common/" }
+analysis = { path = "../analysis/" }
 
 csdemo = { package = "csdemo", git = "https://github.com/Lol3rrr/csdemo.git", ref = "main" }
 memmap2 = { version = "0.9" }
