@@ -68,6 +68,9 @@ pub fn parse(buf: &[u8]) -> Result<EndOfGame, ()> {
                             &mut player_life,
                         );
                     }
+                    csdemo::game_event::GameEvent::PlayerHurt(phurt) => {
+                        // println!("Untracked: {:?}", phurt);
+                    }
                     _ => {}
                 };
             }
@@ -108,10 +111,12 @@ fn player_death(
 
     let player_died_player = player_info.get(&player_died_id).unwrap();
     let player_died = player_stats.entry(player_died_id).or_default();
-
+    
     let attacker_id = match death.attacker.filter(|p| p.0 < 10) {
         Some(a) => a,
-        None => return,
+        None => {
+            return;
+        },
     };
 
     player_died.deaths += 1;
@@ -147,20 +152,17 @@ fn player_hurt(
 ) {
     let attacked_player = match player_info.get(hurt.userid.as_ref().unwrap()) {
         Some(a) => a,
-        None => return,
+        None => {
+            return;
+        },
     };
 
     let attacker_id = match hurt.attacker {
         Some(aid) => aid,
-        None => return,
+        None => {
+            return;
+        },
     };
-
-    let attacking_player = match player_info.get(&attacker_id) {
-        Some(a) => a,
-        None => return,
-    };
-
-    let attacker = player_stats.entry(attacker_id).or_default();
 
     let n_health = match hurt.health {
         Some(csdemo::RawValue::F32(v)) => v as u8,
@@ -168,17 +170,24 @@ fn player_hurt(
         Some(csdemo::RawValue::U64(v)) => v as u8,
         _ => 0,
     };
-    let dmg_dealt = player_life
-        .get(hurt.userid.as_ref().unwrap())
-        .copied()
-        .unwrap_or(100)
-        - n_health;
+    let previous_health = player_life.get(hurt.userid.as_ref().unwrap()).copied().unwrap();
+    let dmg_dealt = previous_health - n_health;
 
     player_life.insert(hurt.userid.unwrap(), n_health);
 
-    if attacking_player.team == attacked_player.team {
-        return;
-    }
+    if let Some(attacking_player) = player_info.get(&attacker_id) {
+        if attacking_player.xuid == 76561198119236104 {
+            println!("Shot {:?} for {}", attacked_player, dmg_dealt);
+        }
 
-    attacker.damage += dmg_dealt as usize;
+        let attacker = player_stats.entry(attacker_id).or_default();
+
+        if attacking_player.xuid == attacked_player.xuid {
+            attacker.self_damage += dmg_dealt as usize;
+        } else if attacking_player.team == attacked_player.team {
+            attacker.team_damage += dmg_dealt as usize;
+        } else {
+            attacker.damage += dmg_dealt as usize;
+        }
+    }
 }
