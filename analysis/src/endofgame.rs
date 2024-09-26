@@ -18,9 +18,10 @@ pub struct PlayerStats {
     pub kills: usize,
     pub deaths: usize,
     pub damage: usize,
+    pub assists: usize,
+    pub team_kills: usize,
     pub team_damage: usize,
     pub self_damage: usize,
-    pub assists: usize,
 }
 
 pub fn parse(buf: &[u8]) -> Result<EndOfGame, ()> {
@@ -111,12 +112,12 @@ fn player_death(
 
     let player_died_player = player_info.get(&player_died_id).unwrap();
     let player_died = player_stats.entry(player_died_id).or_default();
-    
+
     let attacker_id = match death.attacker.filter(|p| p.0 < 10) {
         Some(a) => a,
         None => {
             return;
-        },
+        }
     };
 
     player_died.deaths += 1;
@@ -124,8 +125,13 @@ fn player_death(
     let attacker_player = player_info
         .get(&attacker_id)
         .expect(&format!("Attacker-ID: {:?}", attacker_id));
-    if attacker_player.team == player_died_player.team {
-        // return;
+    if attacker_player.xuid == player_died_player.xuid {
+        // TODO
+        // Player committed Suicide
+        // How to handle?
+    } else if attacker_player.team == player_died_player.team {
+        let attacker = player_stats.entry(attacker_id).or_default();
+        attacker.team_kills += 1;
     } else {
         let attacker = player_stats.entry(attacker_id).or_default();
         attacker.kills += 1;
@@ -154,14 +160,14 @@ fn player_hurt(
         Some(a) => a,
         None => {
             return;
-        },
+        }
     };
 
     let attacker_id = match hurt.attacker {
         Some(aid) => aid,
         None => {
             return;
-        },
+        }
     };
 
     let n_health = match hurt.health {
@@ -170,16 +176,15 @@ fn player_hurt(
         Some(csdemo::RawValue::U64(v)) => v as u8,
         _ => 0,
     };
-    let previous_health = player_life.get(hurt.userid.as_ref().unwrap()).copied().unwrap();
+    let previous_health = player_life
+        .get(hurt.userid.as_ref().unwrap())
+        .copied()
+        .unwrap();
     let dmg_dealt = previous_health - n_health;
 
     player_life.insert(hurt.userid.unwrap(), n_health);
 
     if let Some(attacking_player) = player_info.get(&attacker_id) {
-        if attacking_player.xuid == 76561198119236104 {
-            println!("Shot {:?} for {}", attacked_player, dmg_dealt);
-        }
-
         let attacker = player_stats.entry(attacker_id).or_default();
 
         if attacking_player.xuid == attacked_player.xuid {
