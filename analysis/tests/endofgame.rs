@@ -2,10 +2,12 @@ use analysis::endofgame;
 use pretty_assertions::assert_eq;
 
 #[test]
-fn nuke() {
-    let input_bytes = include_bytes!("../../testfiles/nuke.dem");
+fn endofgame_nuke() {
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../testfiles/nuke.dem");
+    dbg!(path);
+    let input_bytes = std::fs::read(path).unwrap();
 
-    let result = endofgame::parse(input_bytes).unwrap();
+    let result = endofgame::parse(&input_bytes).unwrap();
 
     let expected = endofgame::EndOfGame {
         map: "de_nuke".to_owned(),
