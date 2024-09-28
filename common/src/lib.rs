@@ -31,4 +31,10 @@ pub mod demo_analysis {
         pub damage: usize,
         pub assists: usize,
     }
+
+    #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+    pub struct PlayerHeatmap {
+        pub name: String,
+        pub png_data: String,
+    }
 }

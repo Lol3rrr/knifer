@@ -9,6 +9,14 @@ diesel::table! {
 }
 
 diesel::table! {
+    demo_heatmaps (demo_id, steam_id) {
+        demo_id -> Int8,
+        steam_id -> Text,
+        data -> Text,
+    }
+}
+
+diesel::table! {
     demo_info (demo_id) {
         demo_id -> Int8,
         map -> Text,
@@ -66,6 +74,7 @@ diesel::table! {
 }
 
 diesel::joinable!(analysis_queue -> demos (demo_id));
+diesel::joinable!(demo_heatmaps -> demo_info (demo_id));
 diesel::joinable!(demo_info -> demos (demo_id));
 diesel::joinable!(demo_player_stats -> demo_info (demo_id));
 diesel::joinable!(demo_players -> demo_info (demo_id));
@@ -73,6 +82,7 @@ diesel::joinable!(processing_status -> demos (demo_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     analysis_queue,
+    demo_heatmaps,
     demo_info,
     demo_player_stats,
     demo_players,

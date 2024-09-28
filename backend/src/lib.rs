@@ -66,7 +66,7 @@ pub async fn run_api(
             "/api/",
             crate::api::router(crate::api::RouterConfig {
                 steam_api_key: steam_api_key.into(),
-                steam_callback_base_url: "http://192.168.0.156:3000".into(),
+                steam_callback_base_url: "http://localhost:3000".into(),
                 // steam_callback_base_url: "http://localhost:3000".into(),
                 steam_callback_path: "/api/steam/callback".into(),
                 upload_dir: upload_folder.clone(),
@@ -101,15 +101,18 @@ pub async fn run_analysis(upload_folder: impl Into<std::path::PathBuf>) {
 
         let demo_id = input.demoid;
 
-        let result = tokio::task::spawn_blocking(move || crate::analysis::analyse_base(input))
+        let base_input = input.clone();
+        let base_result = tokio::task::spawn_blocking(move || crate::analysis::analyse_base(base_input))
             .await
             .unwrap();
 
-        tracing::debug!("Analysis-Result: {:?}", result);
+        let heatmap_result = tokio::task::spawn_blocking(move || crate::analysis::analyse_heatmap(input))
+            .await
+            .unwrap();
 
         let mut db_con = crate::db_connection().await;
 
-        let (player_info, player_stats): (Vec<_>, Vec<_>) = result
+        let (player_info, player_stats): (Vec<_>, Vec<_>) = base_result
             .players
             .into_iter()
             .map(|(info, stats)| {
@@ -133,9 +136,19 @@ pub async fn run_analysis(upload_folder: impl Into<std::path::PathBuf>) {
             })
             .unzip();
 
+        let player_heatmaps: Vec<_> = heatmap_result.into_iter().map(|(player, heatmap)| {
+            tracing::trace!("HeatMap for Player: {:?}", player);
+
+            crate::models::DemoPlayerHeatmap {
+                demo_id,
+                steam_id: player,
+                data: serde_json::to_string(&heatmap).unwrap(),
+            }
+        }).collect();
+
         let demo_info = crate::models::DemoInfo {
             demo_id,
-            map: result.map,
+            map: base_result.map,
         };
 
         let store_demo_info_query =
@@ -173,6 +186,11 @@ pub async fn run_analysis(upload_folder: impl Into<std::path::PathBuf>) {
                         crate::schema::demo_player_stats::dsl::damage,
                     )),
                 ));
+        let store_demo_player_heatmaps_query = diesel::dsl::insert_into(crate::schema::demo_heatmaps::dsl::demo_heatmaps)
+            .values(player_heatmaps)
+            .on_conflict((crate::schema::demo_heatmaps::dsl::demo_id, crate::schema::demo_heatmaps::dsl::steam_id))
+            .do_update()
+            .set((crate::schema::demo_heatmaps::dsl::data.eq(diesel::upsert::excluded(crate::schema::demo_heatmaps::dsl::data))));
         let update_process_info =
             diesel::dsl::update(crate::schema::processing_status::dsl::processing_status)
                 .set(crate::schema::processing_status::dsl::info.eq(1))
@@ -184,6 +202,7 @@ pub async fn run_analysis(upload_folder: impl Into<std::path::PathBuf>) {
                     store_demo_info_query.execute(conn).await?;
                     store_demo_players_query.execute(conn).await?;
                     store_demo_player_stats_query.execute(conn).await?;
+                    store_demo_player_heatmaps_query.execute(conn).await?;
                     update_process_info.execute(conn).await?;
                     Ok(())
                 })
@@ -191,7 +210,6 @@ pub async fn run_analysis(upload_folder: impl Into<std::path::PathBuf>) {
             .await
             .unwrap();
 
-        // TODO
-        // Remove task from queue
+        tracing::info!("Stored analysis results");
     }
 }

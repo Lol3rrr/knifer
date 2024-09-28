@@ -6,7 +6,11 @@ edition = "2021"
 [dependencies]
 csdemo = { package = "csdemo", git = "https://github.com/Lol3rrr/csdemo.git", ref = "main" }
 tracing = { version = "0.1.4" }
+
 image = { version = "0.25" }
+colors-transform = { version = "0.2" }
+
+serde = { version = "1.0", features = ["derive"] }
 
 [dev-dependencies]
 pretty_assertions = { version = "1.4" }

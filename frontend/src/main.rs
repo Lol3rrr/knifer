@@ -32,6 +32,7 @@ fn main() {
                         <Route path="/demo/:id" view=Demo>
                             <Route path="perround" view=frontend::demo::PerRound />
                             <Route path="scoreboard" view=frontend::demo::Scoreboard />
+                            <Route path="heatmaps" view=frontend::demo::heatmap::Heatmaps />                
                             <Route path="" view=frontend::demo::Scoreboard />
                         </Route>
                     </Routes>

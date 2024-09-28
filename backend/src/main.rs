@@ -27,6 +27,7 @@ async fn main() {
         .with(tracing_subscriber::fmt::layer())
         .with(tracing_subscriber::filter::filter_fn(|meta| {
             meta.target().contains("backend")
+            || meta.target().contains("analysis")
         }));
     tracing::subscriber::set_global_default(registry).unwrap();
 

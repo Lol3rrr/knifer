@@ -63,7 +63,7 @@ pub async fn poll_next_task(
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct AnalysisInput {
     pub steamid: String,
     pub demoid: i64,
@@ -119,4 +119,30 @@ pub fn analyse_base(input: AnalysisInput) -> BaseInfo {
                 })
         }).collect()
     }
+}
+
+#[tracing::instrument(skip(input))]
+pub fn analyse_heatmap(input: AnalysisInput) -> std::collections::HashMap<String, analysis::heatmap::HeatMap> {
+    tracing::info!("Generating HEATMAPs");
+
+    let file = std::fs::File::open(&input.path).unwrap();
+    let mmap = unsafe { memmap2::MmapOptions::new().map(&file).unwrap() };
+
+    let config = analysis::heatmap::Config {
+        cell_size: 5.0,
+    };
+    let (heatmaps, players) = analysis::heatmap::parse(&config, &mmap).unwrap();
+
+    tracing::info!("Got {} Heatmaps", heatmaps.len());
+    heatmaps.into_iter().filter_map(|(userid, heatmap)| {
+        let player = match players.get(&userid) {
+            Some(p) => p,
+            None => {
+                tracing::warn!("Could not find player: {:?}", userid);
+                return None;
+            }
+        };
+        
+        Some((player.xuid.to_string(), heatmap))
+    }).collect()
 }

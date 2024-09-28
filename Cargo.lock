@@ -42,9 +42,11 @@ checksum = "4aa90d7ce82d4be67b64039a3d588d38dbcc6736577de4a847025ce5b0c468d1"
 name = "analysis"
 version = "0.1.0"
 dependencies = [
+ "colors-transform",
  "csdemo",
  "image",
  "pretty_assertions",
+ "serde",
  "tracing",
  "tracing-test",
 ]
@@ -277,6 +279,7 @@ dependencies = [
  "analysis",
  "async-trait",
  "axum",
+ "base64 0.22.1",
  "clap",
  "common",
  "csdemo",
@@ -284,6 +287,7 @@ dependencies = [
  "diesel-async",
  "diesel_async_migrations",
  "futures-util",
+ "image",
  "memmap2",
  "reqwest 0.12.7",
  "serde",
@@ -516,6 +520,12 @@ name = "colorchoice"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d3fd119d74b830634cea2a0f58bbd0d54540518a14397557951e79340abc28c0"
+
+[[package]]
+name = "colors-transform"
+version = "0.2.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9226dbc05df4fb986f48d730b001532580883c4c06c5d1c213f4b34c1c157178"
 
 [[package]]
 name = "common"

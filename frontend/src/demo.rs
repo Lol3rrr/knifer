@@ -1,6 +1,8 @@
 use leptos::*;
 use leptos_router::{Outlet, A};
 
+pub mod heatmap;
+
 #[leptos::component]
 pub fn demo() -> impl leptos::IntoView {
     let params = leptos_router::use_params_map();
@@ -39,7 +41,7 @@ pub fn demo() -> impl leptos::IntoView {
         "Demo",
         .analysis_bar {
             display: grid;
-            grid-template-columns: auto auto;
+            grid-template-columns: auto auto auto;
             column-gap: 20px;
 
             background-color: #2d2d2d;
@@ -68,6 +70,7 @@ pub fn demo() -> impl leptos::IntoView {
         <div class="analysis_bar">
             <div class="analysis_selector" class:current=move || selected_tab() == "scoreboard"><A href="scoreboard"><span>Scoreboard</span></A></div>
             <div class="analysis_selector" class:current=move || selected_tab() == "perround"><A href="perround"><span>Per Round</span></A></div>
+            <div class="analysis_selector" class:current=move || selected_tab() == "heatmaps"><A href="heatmaps"><span>Heatmaps</span></A></div>
         </div>
         <div>
             <Outlet/>

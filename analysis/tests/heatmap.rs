@@ -8,8 +8,8 @@ fn heatmap_nuke() {
     dbg!(path);
     let input_bytes = std::fs::read(path).unwrap();
 
-    let config = heatmap::Config { cell_size: 25.0 };
-    let result = heatmap::parse(&config, &input_bytes).unwrap();
+    let config = heatmap::Config { cell_size: 5.0 };
+    let (result, players) = heatmap::parse(&config, &input_bytes).unwrap();
 
     for (user, mut heatmap) in result {
         heatmap.shrink();

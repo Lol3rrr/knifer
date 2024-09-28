@@ -22,6 +22,7 @@ where
         .route("/:id/info", axum::routing::get(info))
         .route("/:id/analysis/scoreboard", axum::routing::get(scoreboard))
         .route("/:id/reanalyse", axum::routing::get(analyise))
+        .route("/:id/analysis/heatmap", axum::routing::get(heatmap))
         .with_state(Arc::new(DemoState {
             upload_folder: upload_folder.into(),
         }))
@@ -238,4 +239,44 @@ async fn scoreboard(
         team1,
         team2,
     }))
+}
+
+#[tracing::instrument(skip(session))]
+async fn heatmap(
+    session: UserSession,
+    Path(demo_id): Path<i64>,
+) -> Result<axum::response::Json<Vec<common::demo_analysis::PlayerHeatmap>>, axum::http::StatusCode> {
+    use base64::prelude::Engine;
+
+    let query = crate::schema::demo_players::dsl::demo_players
+        .inner_join(crate::schema::demo_heatmaps::dsl::demo_heatmaps.on(
+            crate::schema::demo_players::dsl::steam_id.eq(crate::schema::demo_heatmaps::dsl::steam_id)
+                .and(crate::schema::demo_players::dsl::demo_id.eq(crate::schema::demo_heatmaps::dsl::demo_id))
+        )).filter(crate::schema::demo_players::dsl::demo_id.eq(demo_id));
+
+    let mut db_con = crate::db_connection().await;
+
+    let result: Vec<(crate::models::DemoPlayer, crate::models::DemoPlayerHeatmap)> = match query.load(&mut db_con).await {
+        Ok(d) => d,
+        Err(e) => {
+            tracing::error!("Querying DB: {:?}", e);
+            return Err(axum::http::StatusCode::INTERNAL_SERVER_ERROR);;
+        }
+    };
+
+    let data: Vec<common::demo_analysis::PlayerHeatmap> = result.into_iter().map(|(player, heatmap)| {
+        let mut heatmap: analysis::heatmap::HeatMap = serde_json::from_str(&heatmap.data).unwrap();
+        heatmap.shrink();
+        let h_image = heatmap.as_image();
+
+        let mut buffer = std::io::Cursor::new(Vec::new());
+        h_image.write_to(&mut buffer, image::ImageFormat::Png).unwrap();
+
+        common::demo_analysis::PlayerHeatmap {
+            name: player.name,
+            png_data: base64::prelude::BASE64_STANDARD.encode(buffer.into_inner()),
+        }
+    }).collect();
+
+    Ok(axum::Json(data))
 }

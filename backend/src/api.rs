@@ -40,6 +40,8 @@ pub mod steam {
     ) -> Result<axum::response::Redirect, axum::http::StatusCode> {
         let url = state.openid.get_redirect_url();
 
+        tracing::info!("Redirecting to {:?}", url);
+
         Ok(axum::response::Redirect::to(url))
     }
 

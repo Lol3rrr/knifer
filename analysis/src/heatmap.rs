@@ -2,6 +2,7 @@ pub struct Config {
     pub cell_size: f32,
 }
 
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct HeatMap {
     max_x: usize,
     max_y: usize,
@@ -41,7 +42,7 @@ impl HeatMap {
     }
 }
 
-pub fn parse(config: &Config, buf: &[u8]) -> Result<std::collections::HashMap<csdemo::UserId, HeatMap>, ()> {
+pub fn parse(config: &Config, buf: &[u8]) -> Result<(std::collections::HashMap<csdemo::UserId, HeatMap>, std::collections::HashMap<csdemo::UserId, csdemo::parser::Player>), ()> {
     let tmp = csdemo::Container::parse(buf).map_err(|e| ())?;
     let output = csdemo::parser::parse(
         csdemo::FrameIterator::parse(tmp.inner),
@@ -64,6 +65,8 @@ pub fn parse(config: &Config, buf: &[u8]) -> Result<std::collections::HashMap<cs
         })
         .collect();
 
+    tracing::debug!("Pawn-IDs: {:?}", pawn_ids);
+
     let mut entity_id_to_user = std::collections::HashMap::<i32, csdemo::UserId>::new();
     let mut player_lifestate = std::collections::HashMap::<csdemo::UserId, u32>::new();
     let mut player_position = std::collections::HashMap::<csdemo::UserId, (f32, f32, f32)>::new();
@@ -85,7 +88,22 @@ pub fn parse(config: &Config, buf: &[u8]) -> Result<std::collections::HashMap<cs
         );
     }
 
-    Ok(heatmaps)
+    Ok((heatmaps, output.player_info))
+}
+
+fn get_entityid(props: &[csdemo::parser::entities::EntityProp]) -> Option<i32> {
+    props.iter().find_map(|prop| {
+        if prop.prop_info.prop_name.as_ref() != "CCSPlayerPawn.m_nEntityId" {
+            return None;
+        }
+
+        let pawn_id: i32 = match &prop.value {
+            csdemo::parser::Variant::U32(v) => *v as i32,
+            other => panic!("Unexpected Variant: {:?}", other),
+        };
+
+        Some(pawn_id)
+    })
 }
 
 fn process_tick(
@@ -103,33 +121,20 @@ fn process_tick(
         .iter()
         .filter(|s| s.class == "CCSPlayerPawn")
     {
-        let user_id_entry = entity_id_to_user.entry(entity_state.id);
-        let user_id = match user_id_entry {
-            std::collections::hash_map::Entry::Occupied(v) => v.into_mut(),
-            std::collections::hash_map::Entry::Vacant(v) => {
-                let pawn_id_prop: Option<i32> = entity_state.props.iter().find_map(|prop| {
-                    if prop.prop_info.prop_name.as_ref() != "CCSPlayerPawn.m_nEntityId" {
-                        return None;
-                    }
+        let user_id = match get_entityid(&entity_state.props) {
+            Some(pawn_id) => {
+                let user_id = pawn_ids.get(&pawn_id).cloned().unwrap();
 
-                    let pawn_id: i32 = match &prop.value {
-                        csdemo::parser::Variant::U32(v) => *v as i32,
-                        other => panic!("Unexpected Variant: {:?}", other),
-                    };
-
-                    Some(pawn_id)
-                });
-
-                let user_id: Option<csdemo::UserId> = pawn_id_prop
-                    .map(|pawn_id| pawn_ids.get(&pawn_id).cloned())
-                    .flatten();
-
-                match user_id {
-                    Some(user_id) => v.insert(user_id),
+                entity_id_to_user.insert(entity_state.id, user_id.clone());
+                user_id.clone()
+            }
+            None => {
+                match entity_id_to_user.get(&entity_state.id).cloned() {
+                    Some(user) => user,
                     None => continue,
                 }
             }
-        };
+        }; 
 
         let _inner_guard =
             tracing::trace_span!("Entity", ?user_id, entity_id=?entity_state.id).entered();
@@ -147,7 +152,7 @@ fn process_tick(
             None => player_cells.get(&user_id).map(|(_, _, z)| *z).unwrap_or(0),
         };
 
-        player_cells.insert(*user_id, (x_cell, y_cell, z_cell));
+        player_cells.insert(user_id, (x_cell, y_cell, z_cell));
 
         let x_coord = match entity_state.get_prop("CCSPlayerPawn.CBodyComponentBaseAnimGraph.m_vecX").map(|prop| prop.value.as_f32()).flatten() {
             Some(c) => c,
@@ -162,7 +167,7 @@ fn process_tick(
             None => player_position.get(&user_id).map(|(_, _, z)| *z).unwrap_or(0.0),
         };
 
-        player_position.insert(*user_id, (x_coord, y_coord, z_coord));
+        player_position.insert(user_id, (x_coord, y_coord, z_coord));
 
         assert!(x_coord >= 0.0);
         assert!(y_coord >= 0.0);
@@ -198,7 +203,7 @@ fn process_tick(
 
         let lifestate = match n_lifestate {
             Some(state) => {
-                player_lifestate.insert(*user_id, state);
+                player_lifestate.insert(user_id, state);
                 state
             }
             None => player_lifestate.get(&user_id).copied().unwrap_or(1),
@@ -209,7 +214,7 @@ fn process_tick(
             continue;
         }
 
-        tracing::trace!("Coord (X, Y, Z): {:?} -> {:?}", (x_coord, y_coord, z_coord), (x_cell, y_cell));
+        // tracing::trace!("Coord (X, Y, Z): {:?} -> {:?}", (x_coord, y_coord, z_coord), (x_cell, y_cell));
 
         let heatmap = heatmaps.entry(user_id.clone()).or_insert(HeatMap::new());
         heatmap.increment(x_cell, y_cell);
@@ -233,13 +238,16 @@ impl core::fmt::Display for HeatMap {
 
 impl HeatMap {
     pub fn as_image(&self) -> image::RgbImage {
+        use colors_transform::Color;
+
         let mut buffer = image::RgbImage::new(self.max_x as u32 + 1, self.max_y as u32 + 1);
 
-        tracing::trace!("Creating Image with Dimensions: {}x{}", buffer.width(), buffer.height());
+        for (y, row) in self.rows.iter().rev().enumerate() {
+            for (x, cell) in row.iter().copied().chain(core::iter::repeat(0)).enumerate().take(self.max_x) {
+                let scaled = (1.0/(1.0 + (cell as f32))) * 240.0;
+                let raw_rgb = colors_transform::Hsl::from(scaled, 100.0, 50.0).to_rgb();
 
-        for (y, row) in self.rows.iter().enumerate() {
-            for (x, cell) in row.iter().enumerate() {
-                buffer.put_pixel(x as u32, y as u32, image::Rgb([*cell as u8, 0, 0]))
+                buffer.put_pixel(x as u32, y as u32, image::Rgb([raw_rgb.get_red() as u8, raw_rgb.get_green() as u8, raw_rgb.get_blue() as u8]))
             }
         }
 
@@ -249,8 +257,6 @@ impl HeatMap {
     pub fn shrink(&mut self) {
         let min_x = self.rows.iter().filter_map(|row| row.iter().enumerate().filter(|(_, v)| **v != 0).map(|(i, _)| i).next()).min().unwrap_or(0);
         let min_y = self.rows.iter().enumerate().filter(|(y, row)| row.iter().any(|v| *v != 0)).map(|(i, _)| i).min().unwrap_or(0);
-
-        tracing::trace!("Truncate to Min-X: {} - Min-Y: {}", min_x, min_y);
 
         let _ = self.rows.drain(0..min_y);
         for row in self.rows.iter_mut() {

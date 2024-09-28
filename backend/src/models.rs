@@ -79,3 +79,12 @@ pub struct AnalysisTask {
     pub demo_id: i64,
     pub steam_id: String,
 }
+
+#[derive(Queryable, Selectable, Insertable, Debug)]
+#[diesel(table_name = crate::schema::demo_heatmaps)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct DemoPlayerHeatmap {
+    pub demo_id: i64,
+    pub steam_id: String,
+    pub data: String,
+}
