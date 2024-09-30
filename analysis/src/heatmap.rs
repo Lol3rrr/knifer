@@ -42,7 +42,13 @@ impl HeatMap {
     }
 }
 
-pub fn parse(config: &Config, buf: &[u8]) -> Result<(std::collections::HashMap<csdemo::UserId, HeatMap>, std::collections::HashMap<csdemo::UserId, csdemo::parser::Player>), ()> {
+#[derive(Debug)]
+pub struct HeatMapOutput {
+    pub player_heatmaps: std::collections::HashMap<csdemo::UserId, HeatMap>,
+    pub player_info: std::collections::HashMap<csdemo::UserId, csdemo::parser::Player>,
+}
+
+pub fn parse(config: &Config, buf: &[u8]) -> Result<HeatMapOutput, ()> {
     let tmp = csdemo::Container::parse(buf).map_err(|e| ())?;
     let output = csdemo::parser::parse(
         csdemo::FrameIterator::parse(tmp.inner),
@@ -50,20 +56,35 @@ pub fn parse(config: &Config, buf: &[u8]) -> Result<(std::collections::HashMap<c
     )
     .map_err(|e| ())?;
 
-    let pawn_ids: std::collections::HashMap<_, _> = output
-        .events
-        .iter()
-        .filter_map(|event| match event {
-            csdemo::DemoEvent::GameEvent(ge) => match ge.as_ref() {
-                csdemo::game_event::GameEvent::PlayerSpawn(pspawn) => match pspawn.userid_pawn {
-                    Some(csdemo::RawValue::I32(v)) => Some((v, pspawn.userid.unwrap())),
+    let pawn_ids = {
+        let mut tmp = std::collections::HashMap::new();
+        
+        for event in output.events.iter() {
+            let entry = match event {
+                csdemo::DemoEvent::GameEvent(ge) => match ge.as_ref() {
+                    csdemo::game_event::GameEvent::PlayerSpawn(pspawn) => match pspawn.userid_pawn.as_ref() {
+                        Some(csdemo::RawValue::I32(v)) => {
+                            Some((*v, pspawn.userid.unwrap()))
+                        }
+                        other => {
+                            // tracing::info!("Unknown Pawn-ID: {:?}", other);
+                            None
+                        },
+                    },
                     _ => None,
                 },
                 _ => None,
-            },
-            _ => None,
-        })
-        .collect();
+            };
+
+            if let Some((pawn, userid)) = entry {
+                if let Some(previous) = tmp.insert(pawn, userid){
+                    assert_eq!(previous, userid);
+                }
+            }
+        }
+
+        tmp
+    };
 
     tracing::debug!("Pawn-IDs: {:?}", pawn_ids);
 
@@ -71,6 +92,7 @@ pub fn parse(config: &Config, buf: &[u8]) -> Result<(std::collections::HashMap<c
     let mut player_lifestate = std::collections::HashMap::<csdemo::UserId, u32>::new();
     let mut player_position = std::collections::HashMap::<csdemo::UserId, (f32, f32, f32)>::new();
     let mut player_cells = std::collections::HashMap::new();
+    let mut unknown_player_entities = std::collections::HashSet::new();
 
     let mut heatmaps = std::collections::HashMap::new();
     for tick_state in output.entity_states.ticks.iter() {
@@ -84,11 +106,19 @@ pub fn parse(config: &Config, buf: &[u8]) -> Result<(std::collections::HashMap<c
             &mut player_lifestate,
             &mut player_position,
             &mut player_cells,
-            &mut heatmaps
+            &mut heatmaps,
+            &mut unknown_player_entities,
         );
     }
 
-    Ok((heatmaps, output.player_info))
+    if !unknown_player_entities.is_empty() {
+        tracing::warn!("Unknown Player Entities: {:?}", unknown_player_entities);
+    }
+
+    Ok(HeatMapOutput {
+        player_heatmaps: heatmaps,
+        player_info: output.player_info,
+    })
 }
 
 fn get_entityid(props: &[csdemo::parser::entities::EntityProp]) -> Option<i32> {
@@ -115,6 +145,7 @@ fn process_tick(
     player_position: &mut std::collections::HashMap<csdemo::UserId, (f32, f32, f32)>,
     player_cells: &mut std::collections::HashMap<csdemo::UserId, (u32, u32, u32)>,
     heatmaps: &mut std::collections::HashMap<csdemo::UserId, HeatMap>,
+    unknown_player_entities: &mut std::collections::HashSet<i32>,
 ) {
     for entity_state in tick_state
         .states
@@ -131,7 +162,10 @@ fn process_tick(
             None => {
                 match entity_id_to_user.get(&entity_state.id).cloned() {
                     Some(user) => user,
-                    None => continue,
+                    None => {
+                        unknown_player_entities.insert(entity_state.id);
+                        continue;
+                    }
                 }
             }
         }; 

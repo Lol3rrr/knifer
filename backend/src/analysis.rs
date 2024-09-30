@@ -131,11 +131,11 @@ pub fn analyse_heatmap(input: AnalysisInput) -> std::collections::HashMap<String
     let config = analysis::heatmap::Config {
         cell_size: 5.0,
     };
-    let (heatmaps, players) = analysis::heatmap::parse(&config, &mmap).unwrap();
+    let result = analysis::heatmap::parse(&config, &mmap).unwrap();
 
-    tracing::info!("Got {} Heatmaps", heatmaps.len());
-    heatmaps.into_iter().filter_map(|(userid, heatmap)| {
-        let player = match players.get(&userid) {
+    tracing::info!("Got {} Heatmaps", result.player_heatmaps.len());
+    result.player_heatmaps.into_iter().filter_map(|(userid, heatmap)| {
+        let player = match result.player_info.get(&userid) {
             Some(p) => p,
             None => {
                 tracing::warn!("Could not find player: {:?}", userid);
