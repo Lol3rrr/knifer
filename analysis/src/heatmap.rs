@@ -44,7 +44,8 @@ impl HeatMap {
 
 #[derive(Debug)]
 pub struct HeatMapOutput {
-    pub player_heatmaps: std::collections::HashMap<csdemo::UserId, HeatMap>,
+    pub player_heatmaps: std::collections::HashMap<i32, HeatMap>,
+    pub entity_to_player: std::collections::HashMap<i32, csdemo::UserId>,
     pub player_info: std::collections::HashMap<csdemo::UserId, csdemo::parser::Player>,
 }
 
@@ -89,10 +90,9 @@ pub fn parse(config: &Config, buf: &[u8]) -> Result<HeatMapOutput, ()> {
     tracing::debug!("Pawn-IDs: {:?}", pawn_ids);
 
     let mut entity_id_to_user = std::collections::HashMap::<i32, csdemo::UserId>::new();
-    let mut player_lifestate = std::collections::HashMap::<csdemo::UserId, u32>::new();
-    let mut player_position = std::collections::HashMap::<csdemo::UserId, (f32, f32, f32)>::new();
+    let mut player_lifestate = std::collections::HashMap::<i32, u32>::new();
+    let mut player_position = std::collections::HashMap::<i32, (f32, f32, f32)>::new();
     let mut player_cells = std::collections::HashMap::new();
-    let mut unknown_player_entities = std::collections::HashSet::new();
 
     let mut heatmaps = std::collections::HashMap::new();
     for tick_state in output.entity_states.ticks.iter() {
@@ -107,16 +107,13 @@ pub fn parse(config: &Config, buf: &[u8]) -> Result<HeatMapOutput, ()> {
             &mut player_position,
             &mut player_cells,
             &mut heatmaps,
-            &mut unknown_player_entities,
         );
     }
 
-    if !unknown_player_entities.is_empty() {
-        tracing::warn!("Unknown Player Entities: {:?}", unknown_player_entities);
-    }
 
     Ok(HeatMapOutput {
         player_heatmaps: heatmaps,
+        entity_to_player: entity_id_to_user,
         player_info: output.player_info,
     })
 }
@@ -141,37 +138,25 @@ fn process_tick(
     tick_state: &csdemo::parser::EntityTickStates,
     entity_id_to_user: &mut std::collections::HashMap<i32, csdemo::UserId>,
     pawn_ids: &std::collections::HashMap<i32, csdemo::UserId>,
-    player_lifestate: &mut std::collections::HashMap<csdemo::UserId, u32>,
-    player_position: &mut std::collections::HashMap<csdemo::UserId, (f32, f32, f32)>,
-    player_cells: &mut std::collections::HashMap<csdemo::UserId, (u32, u32, u32)>,
-    heatmaps: &mut std::collections::HashMap<csdemo::UserId, HeatMap>,
-    unknown_player_entities: &mut std::collections::HashSet<i32>,
+    player_lifestate: &mut std::collections::HashMap<i32, u32>,
+    player_position: &mut std::collections::HashMap<i32, (f32, f32, f32)>,
+    player_cells: &mut std::collections::HashMap<i32, (u32, u32, u32)>,
+    heatmaps: &mut std::collections::HashMap<i32, HeatMap>,
 ) {
     for entity_state in tick_state
         .states
         .iter()
         .filter(|s| s.class == "CCSPlayerPawn")
     {
-        let user_id = match get_entityid(&entity_state.props) {
-            Some(pawn_id) => {
-                let user_id = pawn_ids.get(&pawn_id).cloned().unwrap();
+        if let Some(pawn_id) = get_entityid(&entity_state.props) {
+            let user_id = pawn_ids.get(&pawn_id).cloned().unwrap();
+            entity_id_to_user.insert(entity_state.id, user_id.clone());
+        }
 
-                entity_id_to_user.insert(entity_state.id, user_id.clone());
-                user_id.clone()
-            }
-            None => {
-                match entity_id_to_user.get(&entity_state.id).cloned() {
-                    Some(user) => user,
-                    None => {
-                        unknown_player_entities.insert(entity_state.id);
-                        continue;
-                    }
-                }
-            }
-        }; 
+        let user_id = entity_state.id;
 
         let _inner_guard =
-            tracing::trace_span!("Entity", ?user_id, entity_id=?entity_state.id).entered();
+            tracing::trace_span!("Entity", entity_id=?entity_state.id).entered(); 
 
         let x_cell = match entity_state.get_prop("CCSPlayerPawn.CBodyComponentBaseAnimGraph.m_cellX").map(|prop| prop.value.as_u32()).flatten() {
             Some(c) => c,

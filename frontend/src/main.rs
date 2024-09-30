@@ -14,8 +14,6 @@ async fn load_demos() -> Vec<common::BaseDemoInfo> {
 }
 
 fn main() {
-    let async_data = create_resource(|| (), |_| async move { load_demos().await });
-
     let (upload_demo_read, upload_demo_write) = create_signal(frontend::DemoUploadStatus::Hidden);
 
     mount_to_body(move || {

@@ -133,9 +133,17 @@ pub fn analyse_heatmap(input: AnalysisInput) -> std::collections::HashMap<String
     };
     let result = analysis::heatmap::parse(&config, &mmap).unwrap();
 
-    tracing::info!("Got {} Heatmaps", result.player_heatmaps.len());
-    result.player_heatmaps.into_iter().filter_map(|(userid, heatmap)| {
-        let player = match result.player_info.get(&userid) {
+    tracing::info!("Got {} Entity-Heatmaps", result.player_heatmaps.len());
+    result.player_heatmaps.into_iter().filter_map(|(entity_id, heatmap)| {
+        let userid = match result.entity_to_player.get(&entity_id) {
+            Some(u) => u,
+            None => {
+                tracing::warn!("Could not find User for Entity: {:?}", entity_id);
+                return None;
+            }
+        };
+
+        let player = match result.player_info.get(userid) {
             Some(p) => p,
             None => {
                 tracing::warn!("Could not find player: {:?}", userid);

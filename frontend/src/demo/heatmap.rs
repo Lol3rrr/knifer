@@ -72,7 +72,7 @@ fn heatmap_view(heatmaps: Vec<common::demo_analysis::PlayerHeatmap>) -> impl lep
                     move || {
                         match value.get() {
                             Some(heatmap) => view! {
-                                <img class="heatmap_img" src=format!("data:image/jpeg;base64,{}", heatmap.png_data) />
+                                <img class="heatmap_img" src=format!("data:image/png;base64,{}", heatmap.png_data) />
                             }.into_any(),
                             None => view! { <p>ERROR</p> }.into_any(),
                         }
