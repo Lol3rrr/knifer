@@ -11,7 +11,8 @@ fn heatmap_nuke() {
     let config = heatmap::Config { cell_size: 5.0 };
     let result = heatmap::parse(&config, &input_bytes).unwrap();
 
-    assert_eq!(result.player_heatmaps.len(), result.player_info.len());
+    assert_eq!(result.player_heatmaps.len(), 11);
+    assert_eq!(result.entity_to_player.len(), 12);
 }
 
 #[test]

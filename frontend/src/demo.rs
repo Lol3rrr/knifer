@@ -3,10 +3,16 @@ use leptos_router::{Outlet, A};
 
 pub mod heatmap;
 
+#[derive(Debug, Clone)]
+struct CurrentDemoName(ReadSignal<String>);
+
 #[leptos::component]
 pub fn demo() -> impl leptos::IntoView {
     let params = leptos_router::use_params_map();
     let id = move || params.with(|params| params.get("id").cloned().unwrap_or_default());
+
+    let (rx, map_tx) = create_signal(String::new());
+    provide_context(CurrentDemoName(rx.clone()));
 
     let demo_info = create_resource(
         || (),
@@ -15,7 +21,11 @@ pub fn demo() -> impl leptos::IntoView {
                 .send()
                 .await
                 .unwrap();
-            res.json::<common::DemoInfo>().await.unwrap()
+            let value = res.json::<common::DemoInfo>().await.unwrap();
+
+            map_tx.set(value.map.clone());
+
+            value
         },
     );
 

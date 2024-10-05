@@ -1,5 +1,7 @@
 use leptos::*;
 
+use super::CurrentDemoName;
+
 #[leptos::component]
 pub fn heatmaps() -> impl leptos::IntoView {
     let heatmaps_resource =
@@ -40,12 +42,22 @@ fn heatmap_view(heatmaps: Vec<common::demo_analysis::PlayerHeatmap>) -> impl lep
 
     let h1 = heatmaps.clone();
 
+    let map = use_context::<CurrentDemoName>().unwrap();
+
     let style = stylers::style! {
         "Heatmap-View",
-        img {
-            width: 75vw;
-            height: 75vw;
+        .heatmap_image {
+            width: 1024px;
+            height: 1024px;
             display: block;
+            position: relative;
+        }
+        .heatmap_image > * {
+            position: absolute;
+        }
+
+        .heatmap_image > .heatmap {
+            opacity: 0.5;
         }
     };
 
@@ -72,7 +84,11 @@ fn heatmap_view(heatmaps: Vec<common::demo_analysis::PlayerHeatmap>) -> impl lep
                     move || {
                         match value.get() {
                             Some(heatmap) => view! {
-                                <img class="heatmap_img" src=format!("data:image/png;base64,{}", heatmap.png_data) />
+                                class=style,
+                                <div class="heatmap_image">
+                                    <img class="radar" src=format!("/static/minimaps/{}.png", map.0.get()) />
+                                    <img class="heatmap" width=1024 height=1024 src=format!("data:image/png;base64,{}", heatmap.png_data) />
+                                </div>
                             }.into_any(),
                             None => view! { <p>ERROR</p> }.into_any(),
                         }

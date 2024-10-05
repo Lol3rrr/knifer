@@ -66,8 +66,8 @@ pub async fn run_api(
             "/api/",
             crate::api::router(crate::api::RouterConfig {
                 steam_api_key: steam_api_key.into(),
-                steam_callback_base_url: "http://localhost:3000".into(),
                 // steam_callback_base_url: "http://localhost:3000".into(),
+                steam_callback_base_url: "http://192.168.0.156:3000".into(),
                 steam_callback_path: "/api/steam/callback".into(),
                 upload_dir: upload_folder.clone(),
             }),

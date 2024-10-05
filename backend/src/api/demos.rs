@@ -72,7 +72,13 @@ async fn upload(
 
     tracing::info!("Upload for Session: {:?}", steam_id);
 
-    let file_content = crate::get_demo_from_upload("demo", form).await.unwrap();
+    let file_content = match crate::get_demo_from_upload("demo", form).await {
+        Some(c) => c,
+        None => {
+            tracing::error!("Getting File content from request");
+            return Err((axum::http::StatusCode::BAD_REQUEST, "Failed to get file-content from upload"));
+        }
+    };
 
     let user_folder = std::path::Path::new(&state.upload_folder).join(format!("{}/", steam_id));
     if !tokio::fs::try_exists(&user_folder).await.unwrap_or(false) {
@@ -260,13 +266,28 @@ async fn heatmap(
         Ok(d) => d,
         Err(e) => {
             tracing::error!("Querying DB: {:?}", e);
-            return Err(axum::http::StatusCode::INTERNAL_SERVER_ERROR);;
+            return Err(axum::http::StatusCode::INTERNAL_SERVER_ERROR);
         }
+    };
+
+    // TODO
+    // These are currently the values for de_inferno
+    // The corresponding values for each map can be found using the Source2 Viewer and opening the
+    // files in 'game/csgo/pak01_dir.vpk' and then 'resource/overviews/{map}.txt'
+    let pos_x: f32 = 2087.0;
+    let pos_y: f32 = 3870.0;
+    let scale: f32 = 4.9;
+    
+    let x = |map_coord: f32| {
+        (map_coord * scale) - pos_x + analysis::heatmap::MAX_COORD
+    };
+    let y = |map_coord: f32| {
+        -(map_coord * scale) + pos_y + analysis::heatmap::MAX_COORD
     };
 
     let data: Vec<common::demo_analysis::PlayerHeatmap> = result.into_iter().map(|(player, heatmap)| {
         let mut heatmap: analysis::heatmap::HeatMap = serde_json::from_str(&heatmap.data).unwrap();
-        heatmap.shrink();
+        heatmap.fit(x(0.0)..x(1024.0), y(1024.0)..y(0.0));
         let h_image = heatmap.as_image();
 
         let mut buffer = std::io::Cursor::new(Vec::new());

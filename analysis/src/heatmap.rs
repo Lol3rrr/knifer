@@ -4,19 +4,27 @@ pub struct Config {
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct HeatMap {
+    #[serde(default)]
+    min_x: usize,
+    #[serde(default)]
+    min_y: usize,
     max_x: usize,
     max_y: usize,
     max_value: usize,
     rows: Vec<Vec<usize>>,
+    block_size: f32,
 }
 
 impl HeatMap {
-    fn new() -> Self {
+    fn new(block_size: f32) -> Self {
         Self {
+            min_x: 0,
+            min_y: 0,
             max_x: 0,
             max_y: 0,
             max_value: 0,
             rows: Vec::new(),
+            block_size,
         }
     }
 
@@ -133,6 +141,8 @@ fn get_entityid(props: &[csdemo::parser::entities::EntityProp]) -> Option<i32> {
     })
 }
 
+pub const MAX_COORD: f32 = (1 << 14) as f32;
+
 fn process_tick(
     config: &Config,
     tick_state: &csdemo::parser::EntityTickStates,
@@ -146,7 +156,7 @@ fn process_tick(
     for entity_state in tick_state
         .states
         .iter()
-        .filter(|s| s.class == "CCSPlayerPawn")
+        .filter(|s| s.class.as_ref() == "CCSPlayerPawn")
     {
         if let Some(pawn_id) = get_entityid(&entity_state.props) {
             let user_id = pawn_ids.get(&pawn_id).cloned().unwrap();
@@ -192,8 +202,6 @@ fn process_tick(
         assert!(y_coord >= 0.0);
         assert!(z_coord >= 0.0);
 
-        const MAX_COORD: f32 = (1 << 14) as f32;
-
         let x_cell_coord = ((x_cell as f32 * (1 << 9) as f32)) as f32;
         let y_cell_coord = ((y_cell as f32 * (1 << 9) as f32)) as f32;
         let z_cell_coord = ((z_cell as f32 * (1 << 9) as f32)) as f32;
@@ -235,7 +243,7 @@ fn process_tick(
 
         // tracing::trace!("Coord (X, Y, Z): {:?} -> {:?}", (x_coord, y_coord, z_coord), (x_cell, y_cell));
 
-        let heatmap = heatmaps.entry(user_id.clone()).or_insert(HeatMap::new());
+        let heatmap = heatmaps.entry(user_id.clone()).or_insert(HeatMap::new(config.cell_size));
         heatmap.increment(x_cell, y_cell);
     }
 }
@@ -256,13 +264,20 @@ impl core::fmt::Display for HeatMap {
 }
 
 impl HeatMap {
+    pub fn coords(&self) -> ((f32, f32), (f32, f32)) {
+        (
+            (self.min_x as f32 * self.block_size - MAX_COORD, self.max_x as f32 * self.block_size - MAX_COORD),
+            (self.min_y as f32 * self.block_size - MAX_COORD, self.max_y as f32 * self.block_size - MAX_COORD)
+        )
+    }
+
     pub fn as_image(&self) -> image::RgbImage {
         use colors_transform::Color;
 
-        let mut buffer = image::RgbImage::new(self.max_x as u32 + 1, self.max_y as u32 + 1);
+        let mut buffer = image::RgbImage::new((self.max_x - self.min_x) as u32 + 1, (self.max_y - self.min_y) as u32 + 1);
 
         for (y, row) in self.rows.iter().rev().enumerate() {
-            for (x, cell) in row.iter().copied().chain(core::iter::repeat(0)).enumerate().take(self.max_x) {
+            for (x, cell) in row.iter().copied().chain(core::iter::repeat(0)).enumerate().take((self.max_x - self.min_x)) {
                 let scaled = (1.0/(1.0 + (cell as f32))) * 240.0;
                 let raw_rgb = colors_transform::Hsl::from(scaled, 100.0, 50.0).to_rgb();
 
@@ -273,17 +288,101 @@ impl HeatMap {
         buffer
     }
 
-    pub fn shrink(&mut self) {
-        let min_x = self.rows.iter().filter_map(|row| row.iter().enumerate().filter(|(_, v)| **v != 0).map(|(i, _)| i).next()).min().unwrap_or(0);
-        let min_y = self.rows.iter().enumerate().filter(|(y, row)| row.iter().any(|v| *v != 0)).map(|(i, _)| i).min().unwrap_or(0);
+    pub fn fit(&mut self, xs: core::ops::Range<f32>, ys: core::ops::Range<f32>) {
+        let min_x = (xs.start / self.block_size - self.min_x as f32) as usize;       
+        let min_y = (ys.start / self.block_size - self.min_y as f32) as usize;
 
         let _ = self.rows.drain(0..min_y);
         for row in self.rows.iter_mut() {
-            let _ = row.drain(0..min_x);
+            let _ = row.drain(0..min_x.min(row.len()));
         }
 
+        let x_steps = ((xs.end - xs.start) / self.block_size) as usize;
+        let y_steps = ((ys.end - ys.start) / self.block_size) as usize;
 
-        self.max_y = self.rows.len();
-        self.max_x = self.rows.iter().map(|r| r.len()).max().unwrap_or(0);
+        for row in self.rows.iter_mut() {
+            row.resize(x_steps, 0);
+        }
+        self.rows.resize_with(y_steps, || vec![0; x_steps]);
+
+        self.min_y += (0..min_y).len();
+        self.min_x += (0..min_x).len();
+
+        self.max_y = self.min_y + self.rows.len();
+        self.max_x = self.min_x + self.rows.iter().map(|r| r.len()).max().unwrap_or(0);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fit_no_cutoff() {
+        let mut input = HeatMap::new(2.0);
+
+        input.increment(3, 3);
+        input.increment(2, 2);
+
+        assert_eq!(input.min_x, 0);
+        assert_eq!(input.min_y, 0);
+        assert_eq!(input.max_x, 3);
+        assert_eq!(input.max_y, 3);
+
+        assert_eq!(
+            &vec![
+                vec![],
+                vec![],
+                vec![0, 0, 1],
+                vec![0, 0, 0, 1]
+            ],
+            &input.rows
+        );
+
+        input.fit(2.0..10.0, 2.0..10.0);
+
+        
+        assert_eq!(
+            &vec![
+                vec![0, 0, 0, 0],
+                vec![0, 1, 0, 0],
+                vec![0, 0, 1, 0],
+                vec![0, 0, 0, 0],
+            ],
+            &input.rows
+        );
+    }
+
+    #[test]
+    fn fit_cutoff() {
+        let mut input = HeatMap::new(2.0);
+
+        input.increment(3, 3);
+        input.increment(2, 2);
+
+        assert_eq!(input.min_x, 0);
+        assert_eq!(input.min_y, 0);
+        assert_eq!(input.max_x, 3);
+        assert_eq!(input.max_y, 3);
+
+        assert_eq!(
+            &vec![
+                vec![],
+                vec![],
+                vec![0, 0, 1],
+                vec![0, 0, 0, 1]
+            ],
+            &input.rows
+        );
+
+        input.fit(6.0..10.0, 6.0..10.0);
+
+        assert_eq!(
+            &vec![
+                vec![1, 0],
+                vec![0, 0]
+            ],
+            &input.rows
+        );
     }
 }
