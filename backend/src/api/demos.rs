@@ -254,13 +254,22 @@ async fn heatmap(
 ) -> Result<axum::response::Json<Vec<common::demo_analysis::PlayerHeatmap>>, axum::http::StatusCode> {
     use base64::prelude::Engine;
 
+    let mut db_con = crate::db_connection().await;
+
+    let demo_info_query = crate::schema::demo_info::dsl::demo_info.filter(crate::schema::demo_info::dsl::demo_id.eq(demo_id));
+    let demo_info: crate::models::DemoInfo = match demo_info_query.first(&mut db_con).await {
+        Ok(i) => i,
+        Err(e) => {
+            tracing::error!("Could not find Demo '{:?}': {:?}", demo_id, e);
+            return Err(axum::http::StatusCode::BAD_REQUEST);
+        }
+    };
+
     let query = crate::schema::demo_players::dsl::demo_players
         .inner_join(crate::schema::demo_heatmaps::dsl::demo_heatmaps.on(
             crate::schema::demo_players::dsl::steam_id.eq(crate::schema::demo_heatmaps::dsl::steam_id)
                 .and(crate::schema::demo_players::dsl::demo_id.eq(crate::schema::demo_heatmaps::dsl::demo_id))
         )).filter(crate::schema::demo_players::dsl::demo_id.eq(demo_id));
-
-    let mut db_con = crate::db_connection().await;
 
     let result: Vec<(crate::models::DemoPlayer, crate::models::DemoPlayerHeatmap)> = match query.load(&mut db_con).await {
         Ok(d) => d,
@@ -270,24 +279,18 @@ async fn heatmap(
         }
     };
 
-    // TODO
-    // These are currently the values for de_inferno
-    // The corresponding values for each map can be found using the Source2 Viewer and opening the
-    // files in 'game/csgo/pak01_dir.vpk' and then 'resource/overviews/{map}.txt'
-    let pos_x: f32 = 2087.0;
-    let pos_y: f32 = 3870.0;
-    let scale: f32 = 4.9;
-    
-    let x = |map_coord: f32| {
-        (map_coord * scale) - pos_x + analysis::heatmap::MAX_COORD
-    };
-    let y = |map_coord: f32| {
-        -(map_coord * scale) + pos_y + analysis::heatmap::MAX_COORD
+    let demo_map = &demo_info.map;
+    let minimap_coords = match MINIMAP_COORDINATES.get(demo_map) {
+        Some(c) => c,
+        None => {
+            tracing::error!("Unknown Map in Demo: {:?}", demo_map);
+            return Err(axum::http::StatusCode::BAD_REQUEST);
+        }
     };
 
     let data: Vec<common::demo_analysis::PlayerHeatmap> = result.into_iter().map(|(player, heatmap)| {
         let mut heatmap: analysis::heatmap::HeatMap = serde_json::from_str(&heatmap.data).unwrap();
-        heatmap.fit(x(0.0)..x(1024.0), y(1024.0)..y(0.0));
+        heatmap.fit(minimap_coords.x_coord(0.0)..minimap_coords.x_coord(1024.0), minimap_coords.y_coord(1024.0)..minimap_coords.y_coord(0.0));
         let h_image = heatmap.as_image();
 
         let mut buffer = std::io::Cursor::new(Vec::new());
@@ -300,4 +303,35 @@ async fn heatmap(
     }).collect();
 
     Ok(axum::Json(data))
+}
+
+// The corresponding values for each map can be found using the Source2 Viewer and opening the
+// files in 'game/csgo/pak01_dir.vpk' and then 'resource/overviews/{map}.txt'
+static MINIMAP_COORDINATES: phf::Map<&str, MiniMapDefinition> = phf::phf_map! {
+    "de_inferno" => MiniMapDefinition {
+        pos_x: -2087.0,
+        pos_y: 3870.0,
+        scale: 4.9,
+    },
+    "de_dust2" => MiniMapDefinition {
+        pos_x: -2476.0,
+        pos_y: 3239.0,
+        scale: 4.4
+    },
+};
+
+#[derive(Debug, PartialEq)]
+struct MiniMapDefinition {
+    pos_x: f32,
+    pos_y: f32,
+    scale: f32,
+}
+
+impl MiniMapDefinition {
+    pub fn x_coord(&self, map_coord: f32) -> f32 {
+        (map_coord * self.scale) + self.pos_x + analysis::heatmap::MAX_COORD
+    }
+    pub fn y_coord(&self, map_coord: f32) -> f32 {
+        -(map_coord * self.scale) + self.pos_y + analysis::heatmap::MAX_COORD
+    }
 }

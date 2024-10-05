@@ -289,6 +289,7 @@ dependencies = [
  "futures-util",
  "image",
  "memmap2",
+ "phf",
  "reqwest 0.12.8",
  "serde",
  "serde_json",
