@@ -18,20 +18,28 @@ pub fn heatmaps() -> impl leptos::IntoView {
                 .unwrap()
         });
 
-    view! {
-        <h3>Heatmaps</h3>
-
-        <Suspense fallback=move || view! { <p>Loading Heatmaps</p> }>
-            <div>
-        {
-            move || {
-                heatmaps_resource.get().map(|h| {
-                    view! { <HeatmapView heatmaps=h /> }
-                })
-            }
+    let style = stylers::style! {
+        "Heatmap-Wrapper",
+        .container {
+            margin-top: 1vh;
         }
-            </div>
-        </Suspense>
+    };
+
+    view! {
+        class=style,
+        <div class="container">
+            <Suspense fallback=move || view! { <p>Loading Heatmaps</p> }>
+                <div>
+            {
+                move || {
+                    heatmaps_resource.get().map(|h| {
+                        view! { <HeatmapView heatmaps=h /> }
+                    })
+                }
+            }
+                </div>
+            </Suspense>
+        </div>
     }
 }
 
@@ -59,12 +67,21 @@ fn heatmap_view(heatmaps: Vec<common::demo_analysis::PlayerHeatmap>) -> impl lep
         .heatmap_image > .heatmap {
             opacity: 0.5;
         }
+
+        .heatmap_image > img {
+            width: min(70vw, 70vh);
+            height: min(70vh, 70vw);
+        }
+
+        .player_select {
+            width: min(70vw, 70vh);
+        }
     };
 
     view! {
         class=style,
         <div>
-            <select on:change=move |ev| {
+            <select class="player_select" on:change=move |ev| {
                 let new_value = event_target_value(&ev);
                 let idx: usize = new_value.parse().unwrap();
                 set_value(heatmaps.get(idx).cloned());
@@ -87,7 +104,7 @@ fn heatmap_view(heatmaps: Vec<common::demo_analysis::PlayerHeatmap>) -> impl lep
                                 class=style,
                                 <div class="heatmap_image">
                                     <img class="radar" src=format!("/static/minimaps/{}.png", map.0.get()) />
-                                    <img class="heatmap" width=1024 height=1024 src=format!("data:image/png;base64,{}", heatmap.png_data) />
+                                    <img class="heatmap" src=format!("data:image/png;base64,{}", heatmap.png_data) />
                                 </div>
                             }.into_any(),
                             None => view! { <p>ERROR</p> }.into_any(),

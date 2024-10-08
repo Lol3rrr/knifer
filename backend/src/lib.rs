@@ -101,96 +101,26 @@ pub async fn run_analysis(upload_folder: impl Into<std::path::PathBuf>) {
 
         let demo_id = input.demoid;
 
-        let base_input = input.clone();
-        let base_result = tokio::task::spawn_blocking(move || crate::analysis::analyse_base(base_input))
-            .await
-            .unwrap();
+        let mut store_result_fns = Vec::new();
+        for analysis in analysis::ANALYSIS_METHODS.iter().map(|a| a.clone()) {
+            let input = input.clone();
+            let store_result = match tokio::task::spawn_blocking(move || analysis.analyse(input)).await {
+                Ok(Ok(r)) => r,
+                Ok(Err(e)) => {
+                    tracing::error!("Analysis failed: {:?}", e);
+                    continue;
+                }
+                Err(e) => {
+                    tracing::error!("Joining Task: {:?}", e);
+                    continue;
+                }
+            };
 
-        let heatmap_result = tokio::task::spawn_blocking(move || crate::analysis::analyse_heatmap(input))
-            .await
-            .unwrap();
+            store_result_fns.push(store_result);
+        }
 
         let mut db_con = crate::db_connection().await;
 
-        let (player_info, player_stats): (Vec<_>, Vec<_>) = base_result
-            .players
-            .into_iter()
-            .map(|(info, stats)| {
-                (
-                    crate::models::DemoPlayer {
-                        demo_id,
-                        name: info.name,
-                        steam_id: info.steam_id.clone(),
-                        team: info.team as i16,
-                        color: info.color as i16,
-                    },
-                    crate::models::DemoPlayerStats {
-                        demo_id,
-                        steam_id: info.steam_id,
-                        deaths: stats.deaths as i16,
-                        kills: stats.kills as i16,
-                        damage: stats.damage as i16,
-                        assists: stats.assists as i16,
-                    },
-                )
-            })
-            .unzip();
-
-        let player_heatmaps: Vec<_> = heatmap_result.into_iter().map(|(player, heatmap)| {
-            tracing::trace!("HeatMap for Player: {:?}", player);
-
-            crate::models::DemoPlayerHeatmap {
-                demo_id,
-                steam_id: player,
-                data: serde_json::to_string(&heatmap).unwrap(),
-            }
-        }).collect();
-
-        let demo_info = crate::models::DemoInfo {
-            demo_id,
-            map: base_result.map,
-        };
-
-        let store_demo_info_query =
-            diesel::dsl::insert_into(crate::schema::demo_info::dsl::demo_info)
-                .values(&demo_info)
-                .on_conflict(crate::schema::demo_info::dsl::demo_id)
-                .do_update()
-                .set(
-                    crate::schema::demo_info::dsl::map
-                        .eq(diesel::upsert::excluded(crate::schema::demo_info::dsl::map)),
-                );
-        let store_demo_players_query =
-            diesel::dsl::insert_into(crate::schema::demo_players::dsl::demo_players)
-                .values(player_info)
-                .on_conflict_do_nothing();
-        let store_demo_player_stats_query =
-            diesel::dsl::insert_into(crate::schema::demo_player_stats::dsl::demo_player_stats)
-                .values(player_stats)
-                .on_conflict((
-                    crate::schema::demo_player_stats::dsl::demo_id,
-                    crate::schema::demo_player_stats::dsl::steam_id,
-                ))
-                .do_update()
-                .set((
-                    crate::schema::demo_player_stats::dsl::deaths.eq(diesel::upsert::excluded(
-                        crate::schema::demo_player_stats::dsl::deaths,
-                    )),
-                    crate::schema::demo_player_stats::dsl::kills.eq(diesel::upsert::excluded(
-                        crate::schema::demo_player_stats::dsl::kills,
-                    )),
-                    crate::schema::demo_player_stats::dsl::assists.eq(diesel::upsert::excluded(
-                        crate::schema::demo_player_stats::dsl::assists,
-                    )),
-                    crate::schema::demo_player_stats::dsl::damage.eq(diesel::upsert::excluded(
-                        crate::schema::demo_player_stats::dsl::damage,
-                    )),
-                ));
-        let store_demo_player_heatmaps_query = diesel::dsl::insert_into(crate::schema::demo_heatmaps::dsl::demo_heatmaps)
-            .values(player_heatmaps)
-            .on_conflict((crate::schema::demo_heatmaps::dsl::demo_id, crate::schema::demo_heatmaps::dsl::steam_id))
-            .do_update()
-            .set((crate::schema::demo_heatmaps::dsl::data.eq(diesel::upsert::excluded(crate::schema::demo_heatmaps::dsl::data))));
         let update_process_info =
             diesel::dsl::update(crate::schema::processing_status::dsl::processing_status)
                 .set(crate::schema::processing_status::dsl::info.eq(1))
@@ -199,11 +129,11 @@ pub async fn run_analysis(upload_folder: impl Into<std::path::PathBuf>) {
         db_con
             .transaction::<'_, '_, '_, _, diesel::result::Error, _>(|conn| {
                 Box::pin(async move {
-                    store_demo_info_query.execute(conn).await?;
-                    store_demo_players_query.execute(conn).await?;
-                    store_demo_player_stats_query.execute(conn).await?;
-                    store_demo_player_heatmaps_query.execute(conn).await?;
+                    for store_fn in store_result_fns {
+                        store_fn(conn).await?;
+                    }
                     update_process_info.execute(conn).await?;
+
                     Ok(())
                 })
             })

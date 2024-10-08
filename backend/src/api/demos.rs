@@ -20,8 +20,9 @@ where
                 .layer(axum::extract::DefaultBodyLimit::max(500 * 1024 * 1024)),
         )
         .route("/:id/info", axum::routing::get(info))
-        .route("/:id/analysis/scoreboard", axum::routing::get(scoreboard))
         .route("/:id/reanalyse", axum::routing::get(analyise))
+        .route("/:id/analysis/scoreboard", axum::routing::get(scoreboard))
+        .route("/:id/analysis/perround", axum::routing::get(perround))
         .route("/:id/analysis/heatmap", axum::routing::get(heatmap))
         .with_state(Arc::new(DemoState {
             upload_folder: upload_folder.into(),
@@ -305,18 +306,116 @@ async fn heatmap(
     Ok(axum::Json(data))
 }
 
+#[tracing::instrument(skip(session))]
+async fn perround(
+    session: UserSession,
+    Path(demo_id): Path<i64>,
+) -> Result<axum::response::Json<Vec<common::demo_analysis::DemoRound>>, axum::http::StatusCode> {
+    let rounds_query = crate::schema::demo_round::dsl::demo_round.filter(crate::schema::demo_round::dsl::demo_id.eq(demo_id));
+    let round_players_query = crate::schema::demo_players::dsl::demo_players.filter(crate::schema::demo_players::dsl::demo_id.eq(demo_id));
+
+    let mut db_con = crate::db_connection().await;
+    
+    let raw_rounds: Vec<crate::models::DemoRound> = rounds_query.load(&mut db_con).await.unwrap();
+    let players: Vec<crate::models::DemoPlayer> = round_players_query.load(&mut db_con).await.unwrap();
+
+    let mut result = Vec::with_capacity(raw_rounds.len());
+    for raw_round in raw_rounds.into_iter() {
+        let reason = match serde_json::from_str(&raw_round.win_reason) {
+            Ok(analysis::perround::WinReason::StillInProgress) => common::demo_analysis::RoundWinReason::StillInProgress,
+            Ok(analysis::perround::WinReason::TKilled) => common::demo_analysis::RoundWinReason::TKilled,
+            Ok(analysis::perround::WinReason::CTKilled) => common::demo_analysis::RoundWinReason::CTKilled,
+            Ok(analysis::perround::WinReason::BombDefused) => common::demo_analysis::RoundWinReason::BombDefused,
+            Ok(analysis::perround::WinReason::BombExploded) => common::demo_analysis::RoundWinReason::BombExploded,
+            Ok(analysis::perround::WinReason::TimeRanOut) => common::demo_analysis::RoundWinReason::TimeRanOut,
+            Ok(other) => {
+                tracing::error!("Unknown Mapping {:?}", other);
+                return Err(axum::http::StatusCode::INTERNAL_SERVER_ERROR);
+            }
+            Err(e) => {
+                tracing::error!("Deserializing Win Reason: {:?}", e);
+                return Err(axum::http::StatusCode::INTERNAL_SERVER_ERROR);
+            }
+        };
+
+        let parsed_events: Vec<analysis::perround::RoundEvent> = serde_json::from_value(raw_round.events).unwrap();
+        let events: Vec<_> = parsed_events.into_iter().map(|event| {
+            match event {
+                analysis::perround::RoundEvent::BombPlanted => common::demo_analysis::RoundEvent::BombPlanted,
+                analysis::perround::RoundEvent::BombDefused => common::demo_analysis::RoundEvent::BombDefused,
+                analysis::perround::RoundEvent::Kill { attacker, died } => {
+                    let attacker_name = players.iter().find(|p| p.steam_id == attacker.to_string()).map(|p| p.name.clone()).unwrap();
+                    let died_name = players.iter().find(|p| p.steam_id == died.to_string()).map(|p| p.name.clone()).unwrap();
+
+                    common::demo_analysis::RoundEvent::Killed {
+                        attacker: attacker_name,
+                        died: died_name,
+                    }
+                }
+            }
+        }).collect();
+
+        result.push(common::demo_analysis::DemoRound {
+            reason,
+            events,
+        });
+    }
+
+    Ok(axum::Json(result))
+}
+
 // The corresponding values for each map can be found using the Source2 Viewer and opening the
 // files in 'game/csgo/pak01_dir.vpk' and then 'resource/overviews/{map}.txt'
 static MINIMAP_COORDINATES: phf::Map<&str, MiniMapDefinition> = phf::phf_map! {
-    "de_inferno" => MiniMapDefinition {
-        pos_x: -2087.0,
-        pos_y: 3870.0,
-        scale: 4.9,
+    "cs_italy" => MiniMapDefinition {
+        pos_x: -2647.0,
+        pos_y: 2592.0,
+        scale: 4.6
+    },
+    "cs_office" => MiniMapDefinition {
+        pos_x: -1838.0,
+        pos_y: 1858.0,
+        scale: 4.1,
+    },
+    "de_ancient" => MiniMapDefinition {
+        pos_x: -2953.0,
+        pos_y: 2164.0,
+        scale: 5.0,
+    },
+    "de_anubis" => MiniMapDefinition {
+        pos_x: -2796.0,
+        pos_y: 3328.0,
+        scale: 5.22,
     },
     "de_dust2" => MiniMapDefinition {
         pos_x: -2476.0,
         pos_y: 3239.0,
         scale: 4.4
+    },
+    "de_inferno" => MiniMapDefinition {
+        pos_x: -2087.0,
+        pos_y: 3870.0,
+        scale: 4.9,
+    },
+    "de_mirage" => MiniMapDefinition {
+        pos_x: -3230.0,
+        pos_y: 1713.0,
+        scale: 5.0,
+    },
+    "de_nuke" => MiniMapDefinition {
+        pos_x: -3453.0,
+        pos_y: 2887.0,
+        scale: 7.0,
+    },
+    "de_overpass" => MiniMapDefinition {
+        pos_x: -4831.0,
+        pos_y: 1781.0,
+        scale: 5.2,
+    },
+    "de_vertigo" => MiniMapDefinition {
+        pos_x: -3168.0,
+        pos_y: 1762.0,
+        scale: 4.0,
     },
 };
 

@@ -52,9 +52,30 @@ impl HeatMap {
 
 #[derive(Debug)]
 pub struct HeatMapOutput {
-    pub player_heatmaps: std::collections::HashMap<i32, HeatMap>,
-    pub entity_to_player: std::collections::HashMap<i32, csdemo::UserId>,
+    pub player_heatmaps: std::collections::HashMap<csdemo::UserId, HeatMap>,
     pub player_info: std::collections::HashMap<csdemo::UserId, csdemo::parser::Player>,
+}
+
+#[derive(Debug)]
+pub struct Team {
+    pub num: u32,
+    pub name: String,
+    pub players: Vec<u32>,
+    pub pawns: Vec<PawnID>,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
+pub struct PawnID(u32);
+
+impl From<i32> for PawnID {
+    fn from(value: i32) -> Self {
+        Self((value & 0x7FF) as u32)
+    }
+}
+impl From<u32> for PawnID {
+    fn from(value: u32) -> Self {
+        Self(value & 0x7FF)
+    }
 }
 
 pub fn parse(config: &Config, buf: &[u8]) -> Result<HeatMapOutput, ()> {
@@ -66,14 +87,14 @@ pub fn parse(config: &Config, buf: &[u8]) -> Result<HeatMapOutput, ()> {
     .map_err(|e| ())?;
 
     let pawn_ids = {
-        let mut tmp = std::collections::HashMap::new();
+        let mut tmp = std::collections::HashMap::<PawnID,_>::new();
         
         for event in output.events.iter() {
             let entry = match event {
                 csdemo::DemoEvent::GameEvent(ge) => match ge.as_ref() {
                     csdemo::game_event::GameEvent::PlayerSpawn(pspawn) => match pspawn.userid_pawn.as_ref() {
                         Some(csdemo::RawValue::I32(v)) => {
-                            Some((*v, pspawn.userid.unwrap()))
+                            Some((PawnID::from(*v), pspawn.userid.unwrap()))
                         }
                         other => {
                             // tracing::info!("Unknown Pawn-ID: {:?}", other);
@@ -95,11 +116,8 @@ pub fn parse(config: &Config, buf: &[u8]) -> Result<HeatMapOutput, ()> {
         tmp
     };
 
-    tracing::debug!("Pawn-IDs: {:?}", pawn_ids);
-
-    let mut entity_id_to_user = std::collections::HashMap::<i32, csdemo::UserId>::new();
-    let mut player_lifestate = std::collections::HashMap::<i32, u32>::new();
-    let mut player_position = std::collections::HashMap::<i32, (f32, f32, f32)>::new();
+    let mut player_lifestate = std::collections::HashMap::<csdemo::UserId, u32>::new();
+    let mut player_position = std::collections::HashMap::<csdemo::UserId, (f32, f32, f32)>::new();
     let mut player_cells = std::collections::HashMap::new();
 
     let mut heatmaps = std::collections::HashMap::new();
@@ -109,7 +127,6 @@ pub fn parse(config: &Config, buf: &[u8]) -> Result<HeatMapOutput, ()> {
         process_tick(
             config,
             tick_state,
-            &mut entity_id_to_user,
             &pawn_ids,
             &mut player_lifestate,
             &mut player_position,
@@ -118,26 +135,11 @@ pub fn parse(config: &Config, buf: &[u8]) -> Result<HeatMapOutput, ()> {
         );
     }
 
+    tracing::debug!("Pawn-IDs: {:?}", pawn_ids);
 
     Ok(HeatMapOutput {
         player_heatmaps: heatmaps,
-        entity_to_player: entity_id_to_user,
         player_info: output.player_info,
-    })
-}
-
-fn get_entityid(props: &[csdemo::parser::entities::EntityProp]) -> Option<i32> {
-    props.iter().find_map(|prop| {
-        if prop.prop_info.prop_name.as_ref() != "CCSPlayerPawn.m_nEntityId" {
-            return None;
-        }
-
-        let pawn_id: i32 = match &prop.value {
-            csdemo::parser::Variant::U32(v) => *v as i32,
-            other => panic!("Unexpected Variant: {:?}", other),
-        };
-
-        Some(pawn_id)
     })
 }
 
@@ -146,27 +148,27 @@ pub const MAX_COORD: f32 = (1 << 14) as f32;
 fn process_tick(
     config: &Config,
     tick_state: &csdemo::parser::EntityTickStates,
-    entity_id_to_user: &mut std::collections::HashMap<i32, csdemo::UserId>,
-    pawn_ids: &std::collections::HashMap<i32, csdemo::UserId>,
-    player_lifestate: &mut std::collections::HashMap<i32, u32>,
-    player_position: &mut std::collections::HashMap<i32, (f32, f32, f32)>,
-    player_cells: &mut std::collections::HashMap<i32, (u32, u32, u32)>,
-    heatmaps: &mut std::collections::HashMap<i32, HeatMap>,
+    pawn_ids: &std::collections::HashMap<PawnID, csdemo::UserId>,
+    player_lifestate: &mut std::collections::HashMap<csdemo::UserId, u32>,
+    player_position: &mut std::collections::HashMap<csdemo::UserId, (f32, f32, f32)>,
+    player_cells: &mut std::collections::HashMap<csdemo::UserId, (u32, u32, u32)>,
+    heatmaps: &mut std::collections::HashMap<csdemo::UserId, HeatMap>,
 ) {
     for entity_state in tick_state
         .states
         .iter()
         .filter(|s| s.class.as_ref() == "CCSPlayerPawn")
     {
-        if let Some(pawn_id) = get_entityid(&entity_state.props) {
-            let user_id = pawn_ids.get(&pawn_id).cloned().unwrap();
-            entity_id_to_user.insert(entity_state.id, user_id.clone());
-        }
-
-        let user_id = entity_state.id;
+        let pawn_id = PawnID::from(entity_state.id);
+        let user_id = match pawn_ids.get(&pawn_id).cloned() {
+            Some(id) => id,
+            None => {
+                continue
+            }
+        };
 
         let _inner_guard =
-            tracing::trace_span!("Entity", entity_id=?entity_state.id).entered(); 
+            tracing::trace_span!("Entity", entity_id=?entity_state.id).entered();
 
         let x_cell = match entity_state.get_prop("CCSPlayerPawn.CBodyComponentBaseAnimGraph.m_cellX").map(|prop| prop.value.as_u32()).flatten() {
             Some(c) => c,
@@ -277,7 +279,7 @@ impl HeatMap {
         let mut buffer = image::RgbImage::new((self.max_x - self.min_x) as u32 + 1, (self.max_y - self.min_y) as u32 + 1);
 
         for (y, row) in self.rows.iter().rev().enumerate() {
-            for (x, cell) in row.iter().copied().chain(core::iter::repeat(0)).enumerate().take((self.max_x - self.min_x)) {
+            for (x, cell) in row.iter().copied().chain(core::iter::repeat(0)).enumerate().take(self.max_x - self.min_x) {
                 let scaled = (1.0/(1.0 + (cell as f32))) * 240.0;
                 let raw_rgb = colors_transform::Hsl::from(scaled, 100.0, 50.0).to_rgb();
 

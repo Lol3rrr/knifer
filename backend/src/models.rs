@@ -88,3 +88,15 @@ pub struct DemoPlayerHeatmap {
     pub steam_id: String,
     pub data: String,
 }
+
+#[derive(Queryable, Selectable, Insertable, Debug)]
+#[diesel(table_name = crate::schema::demo_round)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct DemoRound {
+    pub demo_id: i64,
+    pub round_number: i16,
+    pub start_tick: i64,
+    pub end_tick: i64,
+    pub win_reason: String,
+    pub events: serde_json::Value,
+}

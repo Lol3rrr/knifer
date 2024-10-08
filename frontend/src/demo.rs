@@ -2,6 +2,8 @@ use leptos::*;
 use leptos_router::{Outlet, A};
 
 pub mod heatmap;
+pub mod scoreboard;
+pub mod perround;
 
 #[derive(Debug, Clone)]
 struct CurrentDemoName(ReadSignal<String>);
@@ -85,97 +87,5 @@ pub fn demo() -> impl leptos::IntoView {
         <div>
             <Outlet/>
         </div>
-    }
-}
-
-#[leptos::component]
-pub fn scoreboard() -> impl leptos::IntoView {
-    use leptos::Suspense;
-
-    let scoreboard_resource =
-        create_resource(leptos_router::use_params_map(), |params| async move {
-            let id = params.get("id").unwrap();
-
-            let res =
-                reqwasm::http::Request::get(&format!("/api/demos/{}/analysis/scoreboard", id))
-                    .send()
-                    .await
-                    .unwrap();
-            res.json::<common::demo_analysis::ScoreBoard>()
-                .await
-                .unwrap()
-        });
-
-    let team_display_func = |team: &[common::demo_analysis::ScoreBoardPlayer]| {
-        team.iter()
-            .map(|player| {
-                view! {
-                    <tr>
-                        <td> { player.name.clone() } </td>
-                        <td> { player.kills } </td>
-                        <td> { player.assists } </td>
-                        <td> { player.deaths } </td>
-                        <td> { player.damage } </td>
-                    </tr>
-                }
-            })
-            .collect::<Vec<_>>()
-    };
-
-    view! {
-        <h2>Scoreboard</h2>
-
-        <Suspense
-            fallback=move || view! { <p>Loading Scoreboard data</p> }
-        >
-            <div>
-                <h3>Team 1</h3>
-                <table>
-                    <tr>
-                        <th>Name</th>
-                        <th>Kills</th>
-                        <th>Assists</th>
-                        <th>Deaths</th>
-                        <th>Damage</th>
-                    </tr>
-        {
-            move || {
-                scoreboard_resource.get().map(|s| {
-                    let team = s.team1;
-                    team_display_func(&team)
-                })
-            }
-        }
-                </table>
-            </div>
-
-            <div>
-                <h3>Team 2</h3>
-                <table>
-                    <tr>
-                        <th>Name</th>
-                        <th>Kills</th>
-                        <th>Assists</th>
-                        <th>Deaths</th>
-                        <th>Damage</th>
-                    </tr>
-        {
-            move || {
-                scoreboard_resource.get().map(|s| {
-                    let team = s.team2;
-                    team_display_func(&team)
-                })
-            }
-        }
-                </table>
-            </div>
-        </Suspense>
-    }
-}
-
-#[leptos::component]
-pub fn per_round() -> impl leptos::IntoView {
-    view! {
-        <h3>Per Round</h3>
     }
 }

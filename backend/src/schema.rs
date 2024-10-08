@@ -45,6 +45,17 @@ diesel::table! {
 }
 
 diesel::table! {
+    demo_round (demo_id, round_number) {
+        demo_id -> Int8,
+        round_number -> Int2,
+        start_tick -> Int8,
+        end_tick -> Int8,
+        win_reason -> Text,
+        events -> Json,
+    }
+}
+
+diesel::table! {
     demos (demo_id) {
         steam_id -> Text,
         demo_id -> Int8,
@@ -78,6 +89,7 @@ diesel::joinable!(demo_heatmaps -> demo_info (demo_id));
 diesel::joinable!(demo_info -> demos (demo_id));
 diesel::joinable!(demo_player_stats -> demo_info (demo_id));
 diesel::joinable!(demo_players -> demo_info (demo_id));
+diesel::joinable!(demo_round -> demo_info (demo_id));
 diesel::joinable!(processing_status -> demos (demo_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
@@ -86,6 +98,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     demo_info,
     demo_player_stats,
     demo_players,
+    demo_round,
     demos,
     processing_status,
     sessions,

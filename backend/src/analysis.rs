@@ -3,6 +3,22 @@ use std::path::PathBuf;
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 
+pub mod perround;
+pub mod base;
+pub mod heatmap;
+
+pub trait Analysis {
+    fn analyse(&self, input: AnalysisInput) -> Result<Box<dyn FnOnce(&mut diesel_async::pg::AsyncPgConnection) -> core::pin::Pin<Box<(dyn core::future::Future<Output = Result<(), diesel::result::Error>> + Send + '_)>> + Send>, ()>;
+}
+
+pub static ANALYSIS_METHODS: std::sync::LazyLock<[std::sync::Arc<dyn Analysis + Send + Sync>; 3]> = std::sync::LazyLock::new(|| {
+    [
+        std::sync::Arc::new(base::BaseAnalysis::new()),
+        std::sync::Arc::new(heatmap::HeatmapAnalysis::new()),
+        std::sync::Arc::new(perround::PerRoundAnalysis::new()),
+    ]
+});
+
 pub async fn poll_next_task(
     upload_folder: &std::path::Path,
     db_con: &mut diesel_async::pg::AsyncPgConnection,
@@ -17,7 +33,7 @@ pub async fn poll_next_task(
     loop {
         let result = db_con
             .build_transaction()
-            .run::<'_, _, diesel::result::Error, _>(|conn| {
+            .run::<_, diesel::result::Error, _>(|conn| {
                 Box::pin(async move {
                     let mut results: Vec<crate::models::AnalysisTask> = query.load(conn).await?;
                     let final_result = match results.pop() {
@@ -91,66 +107,4 @@ pub struct BasePlayerStats {
     pub deaths: usize,
     pub damage: usize,
     pub assists: usize,
-}
-
-#[tracing::instrument(skip(input))]
-pub fn analyse_base(input: AnalysisInput) -> BaseInfo {
-    tracing::info!("Performing Base analysis"); 
-
-    let file = std::fs::File::open(&input.path).unwrap();
-    let mmap = unsafe { memmap2::MmapOptions::new().map(&file).unwrap() };
-
-    let result = analysis::endofgame::parse(&mmap).unwrap();
-
-    BaseInfo {
-        map: result.map,
-        players: result.players.into_iter().map(|(info, stats)| {
-            (BasePlayerInfo {
-                name: info.name,
-                steam_id: info.steam_id,
-                team: info.team,
-                ingame_id: info.ingame_id,
-                color: info.color,
-            }, BasePlayerStats {
-                    kills: stats.kills,
-                    assists: stats.assists,
-                    damage: stats.damage,
-                    deaths: stats.deaths,
-                })
-        }).collect()
-    }
-}
-
-#[tracing::instrument(skip(input))]
-pub fn analyse_heatmap(input: AnalysisInput) -> std::collections::HashMap<String, analysis::heatmap::HeatMap> {
-    tracing::info!("Generating HEATMAPs");
-
-    let file = std::fs::File::open(&input.path).unwrap();
-    let mmap = unsafe { memmap2::MmapOptions::new().map(&file).unwrap() };
-
-    let config = analysis::heatmap::Config {
-        cell_size: 5.0,
-    };
-    let result = analysis::heatmap::parse(&config, &mmap).unwrap();
-
-    tracing::info!("Got {} Entity-Heatmaps", result.player_heatmaps.len());
-    result.player_heatmaps.into_iter().filter_map(|(entity_id, heatmap)| {
-        let userid = match result.entity_to_player.get(&entity_id) {
-            Some(u) => u,
-            None => {
-                tracing::warn!("Could not find User for Entity: {:?}", entity_id);
-                return None;
-            }
-        };
-
-        let player = match result.player_info.get(userid) {
-            Some(p) => p,
-            None => {
-                tracing::warn!("Could not find player: {:?}", userid);
-                return None;
-            }
-        };
-        
-        Some((player.xuid.to_string(), heatmap))
-    }).collect()
 }

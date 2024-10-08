@@ -37,4 +37,45 @@ pub mod demo_analysis {
         pub name: String,
         pub png_data: String,
     }
+
+    #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+    pub struct DemoRound {
+        pub reason: RoundWinReason,
+        pub events: Vec<RoundEvent>
+    }
+
+    #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+    pub enum RoundWinReason {
+        StillInProgress,
+        BombExploded,
+        VipEscaped,
+        VipKilled,
+        TSaved,
+        CtStoppedEscape,
+        RoundEndReasonTerroristsStopped,
+        BombDefused,
+        TKilled,
+        CTKilled,
+        Draw,
+        HostageRescued,
+        TimeRanOut,
+        RoundEndReasonHostagesNotRescued,
+        TerroristsNotEscaped,
+        VipNotEscaped,
+        GameStart,
+        TSurrender,
+        CTSurrender,
+        TPlanted,
+        CTReachedHostage,
+    }
+
+    #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+    pub enum RoundEvent {
+        BombPlanted,
+        BombDefused,
+        Killed {
+            attacker: String,
+            died: String,
+        },
+    }
 }

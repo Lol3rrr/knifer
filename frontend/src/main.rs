@@ -3,16 +3,6 @@ use leptos_router::*;
 
 use frontend::{Demo, Homepage, TopBar, UploadDemo};
 
-async fn load_demos() -> Vec<common::BaseDemoInfo> {
-    let res = reqwasm::http::Request::get("/api/demos/list")
-        .send()
-        .await
-        .unwrap();
-    let demos: Vec<common::BaseDemoInfo> = res.json().await.unwrap();
-
-    demos
-}
-
 fn main() {
     let (upload_demo_read, upload_demo_write) = create_signal(frontend::DemoUploadStatus::Hidden);
 
@@ -28,10 +18,10 @@ fn main() {
                     <Routes>
                         <Route path="/" view=Homepage />
                         <Route path="/demo/:id" view=Demo>
-                            <Route path="perround" view=frontend::demo::PerRound />
-                            <Route path="scoreboard" view=frontend::demo::Scoreboard />
+                            <Route path="perround" view=frontend::demo::perround::PerRound />
+                            <Route path="scoreboard" view=frontend::demo::scoreboard::Scoreboard />
                             <Route path="heatmaps" view=frontend::demo::heatmap::Heatmaps />                
-                            <Route path="" view=frontend::demo::Scoreboard />
+                            <Route path="" view=frontend::demo::scoreboard::Scoreboard />
                         </Route>
                     </Routes>
                 </main>

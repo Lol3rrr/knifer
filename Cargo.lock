@@ -45,6 +45,7 @@ dependencies = [
  "colors-transform",
  "csdemo",
  "image",
+ "phf",
  "pretty_assertions",
  "serde",
  "tracing",
