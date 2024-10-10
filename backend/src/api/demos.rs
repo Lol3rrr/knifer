@@ -55,9 +55,11 @@ async fn list(
     Ok(axum::response::Json(
         results
             .into_iter()
-            .map(|(demo, info)| common::BaseDemoInfo {
-                id: demo.demo_id,
-                map: info.map,
+            .map(|(demo, info)| {
+                common::BaseDemoInfo {
+                    id: demo.demo_id,
+                    map: info.map,
+                }
             })
             .collect::<Vec<_>>(),
     ))
@@ -104,24 +106,34 @@ async fn upload(
 
     // Turn all of this into a single transaction
 
-    let query =
+    let db_trans_result = db_con.build_transaction().run(|c| {
+        Box::pin(async move {
+            let query =
         diesel::dsl::insert_into(crate::schema::demos::dsl::demos).values(crate::models::NewDemo {
             demo_id: demo_id.clone(),
             steam_id: steam_id.to_string(),
         });
-    query.execute(&mut db_con).await.unwrap();
+    query.execute(c).await?;
 
     let queue_query = diesel::dsl::insert_into(crate::schema::analysis_queue::dsl::analysis_queue)
         .values(crate::models::AddAnalysisTask {
             demo_id: demo_id.clone(),
             steam_id: steam_id.to_string(),
         });
-    queue_query.execute(&mut db_con).await.unwrap();
+    queue_query.execute(c).await?;
 
     let processing_query =
         diesel::dsl::insert_into(crate::schema::processing_status::dsl::processing_status)
             .values(crate::models::ProcessingStatus { demo_id, info: 0 });
-    processing_query.execute(&mut db_con).await.unwrap();
+    processing_query.execute(c).await?;
+
+            Ok::<(), diesel::result::Error>(())
+        })
+    }).await;
+
+    if let Err(e) = db_trans_result {
+        tracing::error!("Inserting data into db: {:?}", e);
+    }
 
     Ok(axum::response::Redirect::to("/"))
 }
