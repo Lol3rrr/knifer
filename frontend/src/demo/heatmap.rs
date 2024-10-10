@@ -56,7 +56,7 @@ fn heatmap_view(heatmaps: Vec<common::demo_analysis::PlayerHeatmap>) -> impl lep
         "Heatmap-View",
         .heatmap_image {
             width: 1024px;
-            height: 1024px;
+            height: min(70vw, 70vh);
             display: block;
             position: relative;
         }
