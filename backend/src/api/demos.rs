@@ -1,6 +1,7 @@
 use crate::UserSession;
 use axum::extract::{Path, State};
 use diesel::prelude::*;
+use diesel::JoinOnDsl;
 use diesel_async::RunQueryDsl;
 use std::sync::Arc;
 
@@ -40,7 +41,9 @@ async fn list(
     tracing::info!("SteamID: {:?}", steam_id);
 
     let query = crate::schema::demos::dsl::demos
-        .inner_join(crate::schema::demo_info::dsl::demo_info)
+        .inner_join(crate::schema::demo_info::table.on(
+            crate::schema::demos::dsl::demo_id.eq(crate::schema::demo_info::dsl::demo_id),
+        ))
         .select((
             crate::models::Demo::as_select(),
             crate::models::DemoInfo::as_select(),
@@ -60,7 +63,7 @@ async fn list(
     ))
 }
 
-#[tracing::instrument(skip(state, session))]
+#[tracing::instrument(skip(state, session, form))]
 async fn upload(
     State(state): State<Arc<DemoState>>,
     session: crate::UserSession,
@@ -81,17 +84,17 @@ async fn upload(
         }
     };
 
+    let raw_demo_id = uuid::Uuid::now_v7();
+    let demo_id = raw_demo_id.to_string();
+
+    tracing::debug!(?demo_id, "Upload Size: {:?}", file_content.len());
+    
     let user_folder = std::path::Path::new(&state.upload_folder).join(format!("{}/", steam_id));
     if !tokio::fs::try_exists(&user_folder).await.unwrap_or(false) {
         tokio::fs::create_dir_all(&user_folder).await.unwrap();
     }
 
-    let timestamp_secs = std::time::SystemTime::now()
-        .duration_since(std::time::SystemTime::UNIX_EPOCH)
-        .unwrap()
-        .as_secs();
-    let demo_id = timestamp_secs as i64;
-    let demo_file_path = user_folder.join(format!("{}.dem", timestamp_secs));
+    let demo_file_path = user_folder.join(format!("{}.dem", demo_id));
 
     tokio::fs::write(&demo_file_path, file_content)
         .await
@@ -102,15 +105,15 @@ async fn upload(
     // Turn all of this into a single transaction
 
     let query =
-        diesel::dsl::insert_into(crate::schema::demos::dsl::demos).values(crate::models::Demo {
-            demo_id,
+        diesel::dsl::insert_into(crate::schema::demos::dsl::demos).values(crate::models::NewDemo {
+            demo_id: demo_id.clone(),
             steam_id: steam_id.to_string(),
         });
     query.execute(&mut db_con).await.unwrap();
 
     let queue_query = diesel::dsl::insert_into(crate::schema::analysis_queue::dsl::analysis_queue)
         .values(crate::models::AddAnalysisTask {
-            demo_id,
+            demo_id: demo_id.clone(),
             steam_id: steam_id.to_string(),
         });
     queue_query.execute(&mut db_con).await.unwrap();
@@ -126,7 +129,7 @@ async fn upload(
 #[tracing::instrument(skip(session))]
 async fn analyise(
     session: crate::UserSession,
-    Path(demo_id): Path<i64>,
+    Path(demo_id): Path<String>,
 ) -> Result<(), (axum::http::StatusCode, &'static str)> {
     let steam_id = session
         .data()
@@ -139,7 +142,7 @@ async fn analyise(
 
     let query = crate::schema::demos::dsl::demos
         .filter(crate::schema::demos::dsl::steam_id.eq(steam_id.to_string()))
-        .filter(crate::schema::demos::dsl::demo_id.eq(demo_id));
+        .filter(crate::schema::demos::dsl::demo_id.eq(demo_id.clone()));
     let result: Vec<_> = query
         .load::<crate::models::Demo>(&mut db_con)
         .await
@@ -165,7 +168,7 @@ async fn analyise(
 #[tracing::instrument(skip(_session))]
 async fn info(
     _session: UserSession,
-    Path(demo_id): Path<i64>,
+    Path(demo_id): Path<String>,
 ) -> Result<axum::response::Json<common::DemoInfo>, axum::http::StatusCode> {
     tracing::info!("Get info for Demo: {:?}", demo_id);
 
@@ -191,7 +194,7 @@ async fn info(
 #[tracing::instrument(skip(session))]
 async fn scoreboard(
     session: UserSession,
-    Path(demo_id): Path<i64>,
+    Path(demo_id): Path<String>,
 ) -> Result<axum::response::Json<common::demo_analysis::ScoreBoard>, axum::http::StatusCode> {
     let query = crate::schema::demo_players::dsl::demo_players
         .inner_join(
@@ -251,13 +254,13 @@ async fn scoreboard(
 #[tracing::instrument(skip(session))]
 async fn heatmap(
     session: UserSession,
-    Path(demo_id): Path<i64>,
+    Path(demo_id): Path<String>,
 ) -> Result<axum::response::Json<Vec<common::demo_analysis::PlayerHeatmap>>, axum::http::StatusCode> {
     use base64::prelude::Engine;
 
     let mut db_con = crate::db_connection().await;
 
-    let demo_info_query = crate::schema::demo_info::dsl::demo_info.filter(crate::schema::demo_info::dsl::demo_id.eq(demo_id));
+    let demo_info_query = crate::schema::demo_info::dsl::demo_info.filter(crate::schema::demo_info::dsl::demo_id.eq(demo_id.clone()));
     let demo_info: crate::models::DemoInfo = match demo_info_query.first(&mut db_con).await {
         Ok(i) => i,
         Err(e) => {
@@ -309,9 +312,9 @@ async fn heatmap(
 #[tracing::instrument(skip(session))]
 async fn perround(
     session: UserSession,
-    Path(demo_id): Path<i64>,
+    Path(demo_id): Path<String>,
 ) -> Result<axum::response::Json<Vec<common::demo_analysis::DemoRound>>, axum::http::StatusCode> {
-    let rounds_query = crate::schema::demo_round::dsl::demo_round.filter(crate::schema::demo_round::dsl::demo_id.eq(demo_id));
+    let rounds_query = crate::schema::demo_round::dsl::demo_round.filter(crate::schema::demo_round::dsl::demo_id.eq(demo_id.clone()));
     let round_players_query = crate::schema::demo_players::dsl::demo_players.filter(crate::schema::demo_players::dsl::demo_id.eq(demo_id));
 
     let mut db_con = crate::db_connection().await;

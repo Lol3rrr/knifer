@@ -1,6 +1,6 @@
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct BaseDemoInfo {
-    pub id: i64,
+    pub id: String,
     pub map: String,
 }
 
@@ -12,7 +12,7 @@ pub struct UserStatus {
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct DemoInfo {
-    pub id: i64,
+    pub id: String,
     pub map: String,
 }
 

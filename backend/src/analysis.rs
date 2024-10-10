@@ -3,21 +3,38 @@ use std::path::PathBuf;
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 
-pub mod perround;
 pub mod base;
 pub mod heatmap;
+pub mod perround;
 
 pub trait Analysis {
-    fn analyse(&self, input: AnalysisInput) -> Result<Box<dyn FnOnce(&mut diesel_async::pg::AsyncPgConnection) -> core::pin::Pin<Box<(dyn core::future::Future<Output = Result<(), diesel::result::Error>> + Send + '_)>> + Send>, ()>;
+    fn analyse(
+        &self,
+        input: AnalysisInput,
+    ) -> Result<
+        Box<
+            dyn FnOnce(
+                    &mut diesel_async::pg::AsyncPgConnection,
+                ) -> core::pin::Pin<
+                    Box<
+                        (dyn core::future::Future<Output = Result<(), diesel::result::Error>>
+                             + Send
+                             + '_),
+                    >,
+                > + Send,
+        >,
+        (),
+    >;
 }
 
-pub static ANALYSIS_METHODS: std::sync::LazyLock<[std::sync::Arc<dyn Analysis + Send + Sync>; 3]> = std::sync::LazyLock::new(|| {
-    [
-        std::sync::Arc::new(base::BaseAnalysis::new()),
-        std::sync::Arc::new(heatmap::HeatmapAnalysis::new()),
-        std::sync::Arc::new(perround::PerRoundAnalysis::new()),
-    ]
-});
+pub static ANALYSIS_METHODS: std::sync::LazyLock<[std::sync::Arc<dyn Analysis + Send + Sync>; 3]> =
+    std::sync::LazyLock::new(|| {
+        [
+            std::sync::Arc::new(base::BaseAnalysis::new()),
+            std::sync::Arc::new(heatmap::HeatmapAnalysis::new()),
+            std::sync::Arc::new(perround::PerRoundAnalysis::new()),
+        ]
+    });
 
 pub async fn poll_next_task(
     upload_folder: &std::path::Path,
@@ -45,7 +62,7 @@ pub async fn poll_next_task(
                         diesel::dsl::delete(crate::schema::analysis_queue::dsl::analysis_queue)
                             .filter(
                                 crate::schema::analysis_queue::dsl::demo_id
-                                    .eq(final_result.demo_id),
+                                    .eq(final_result.demo_id.clone()),
                             )
                             .filter(
                                 crate::schema::analysis_queue::dsl::steam_id
@@ -82,7 +99,7 @@ pub async fn poll_next_task(
 #[derive(Debug, Clone)]
 pub struct AnalysisInput {
     pub steamid: String,
-    pub demoid: i64,
+    pub demoid: String,
     pub path: PathBuf,
 }
 

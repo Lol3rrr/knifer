@@ -38,7 +38,7 @@ impl Analysis for HeatmapAnalysis {
             tracing::trace!("HeatMap for Player: {:?}", player);
 
             crate::models::DemoPlayerHeatmap {
-                demo_id: input.demoid,
+                demo_id: input.demoid.clone(),
                 steam_id: player,
                 data: serde_json::to_string(&heatmap).unwrap(),
             }

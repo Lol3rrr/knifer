@@ -41,14 +41,14 @@ impl Analysis for BaseAnalysis {
             .map(|(info, stats)| {
                 (
                     crate::models::DemoPlayer {
-                        demo_id: input.demoid,
+                        demo_id: input.demoid.clone(),
                         name: info.name,
                         steam_id: info.steam_id.clone(),
                         team: info.team as i16,
                         color: info.color as i16,
                     },
                     crate::models::DemoPlayerStats {
-                        demo_id: input.demoid,
+                        demo_id: input.demoid.clone(),
                         steam_id: info.steam_id,
                         deaths: stats.deaths as i16,
                         kills: stats.kills as i16,
@@ -60,7 +60,7 @@ impl Analysis for BaseAnalysis {
             .unzip();
 
         let demo_info = crate::models::DemoInfo {
-            demo_id: input.demoid,
+            demo_id: input.demoid.clone(),
             map: base_result.map,
         };
 

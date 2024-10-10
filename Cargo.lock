@@ -301,6 +301,7 @@ dependencies = [
  "tower-sessions",
  "tracing",
  "tracing-subscriber",
+ "uuid",
 ]
 
 [[package]]

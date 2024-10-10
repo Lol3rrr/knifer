@@ -1,6 +1,6 @@
 -- Your SQL goes here
 CREATE TABLE IF NOT EXISTS demo_round (
-  demo_id bigint REFERENCES demo_info(demo_id),
+  demo_id TEXT NOT NULL,
   round_number int2 NOT NULL,
   start_tick bigint NOT NULL,
   end_tick bigint NOT NULL,

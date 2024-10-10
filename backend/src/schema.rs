@@ -2,7 +2,7 @@
 
 diesel::table! {
     analysis_queue (demo_id) {
-        demo_id -> Int8,
+        demo_id -> Text,
         steam_id -> Text,
         created_at -> Timestamp,
     }
@@ -10,7 +10,7 @@ diesel::table! {
 
 diesel::table! {
     demo_heatmaps (demo_id, steam_id) {
-        demo_id -> Int8,
+        demo_id -> Text,
         steam_id -> Text,
         data -> Text,
     }
@@ -18,14 +18,14 @@ diesel::table! {
 
 diesel::table! {
     demo_info (demo_id) {
-        demo_id -> Int8,
+        demo_id -> Text,
         map -> Text,
     }
 }
 
 diesel::table! {
     demo_player_stats (demo_id, steam_id) {
-        demo_id -> Int8,
+        demo_id -> Text,
         steam_id -> Text,
         kills -> Int2,
         deaths -> Int2,
@@ -36,7 +36,7 @@ diesel::table! {
 
 diesel::table! {
     demo_players (demo_id, steam_id) {
-        demo_id -> Int8,
+        demo_id -> Text,
         steam_id -> Text,
         name -> Text,
         team -> Int2,
@@ -46,7 +46,7 @@ diesel::table! {
 
 diesel::table! {
     demo_round (demo_id, round_number) {
-        demo_id -> Int8,
+        demo_id -> Text,
         round_number -> Int2,
         start_tick -> Int8,
         end_tick -> Int8,
@@ -56,15 +56,16 @@ diesel::table! {
 }
 
 diesel::table! {
-    demos (demo_id) {
+    demos (steam_id, demo_id) {
         steam_id -> Text,
-        demo_id -> Int8,
+        demo_id -> Text,
+        uploaded_at -> Timestamptz,
     }
 }
 
 diesel::table! {
     processing_status (demo_id) {
-        demo_id -> Int8,
+        demo_id -> Text,
         info -> Int2,
     }
 }
@@ -78,19 +79,18 @@ diesel::table! {
 }
 
 diesel::table! {
+    user_demos (steam_id, demo_id) {
+        steam_id -> Text,
+        demo_id -> Text,
+    }
+}
+
+diesel::table! {
     users (steamid) {
         steamid -> Text,
         name -> Text,
     }
 }
-
-diesel::joinable!(analysis_queue -> demos (demo_id));
-diesel::joinable!(demo_heatmaps -> demo_info (demo_id));
-diesel::joinable!(demo_info -> demos (demo_id));
-diesel::joinable!(demo_player_stats -> demo_info (demo_id));
-diesel::joinable!(demo_players -> demo_info (demo_id));
-diesel::joinable!(demo_round -> demo_info (demo_id));
-diesel::joinable!(processing_status -> demos (demo_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     analysis_queue,
@@ -102,5 +102,6 @@ diesel::allow_tables_to_appear_in_same_query!(
     demos,
     processing_status,
     sessions,
+    user_demos,
     users,
 );

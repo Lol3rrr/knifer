@@ -18,7 +18,7 @@ impl Analysis for PerRoundAnalysis {
 
         let values: Vec<crate::models::DemoRound> = result.rounds.into_iter().enumerate().map(|(i, r)| {
             crate::models::DemoRound {
-                demo_id: input.demoid,
+                demo_id: input.demoid.clone(),
                 round_number: i as i16,
                 start_tick: r.start as i64,
                 end_tick: r.end as i64,
