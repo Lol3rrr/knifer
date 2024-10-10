@@ -68,6 +68,16 @@ pub fn per_round() -> impl leptos::IntoView {
         p.round_entry {
             margin: 0px;
         }
+
+        .won.ct_won {
+            background-color: #1111ff77;
+        }
+        .won.t_won {
+            background-color: #dd111177;
+        }
+        .lose {
+            background-color: #22222277;
+        }
     };
 
     let (round, set_round) = create_signal(0);
@@ -99,28 +109,52 @@ pub fn per_round() -> impl leptos::IntoView {
                 let round = perround_resource.get().map(|rs| rs.get(r).cloned()).flatten();
                 let reason = round.map(|r| r.reason);
 
-                // Upper is CT by default and lower is T by default
-                let mut upper_symbol = match &reason {
-                    Some(common::demo_analysis::RoundWinReason::TKilled) => view! { <span>Killed Ts</span> }.into_view(),
-                    Some(common::demo_analysis::RoundWinReason::BombDefused) => view! { <span>Defused</span> }.into_view(),
-                    Some(common::demo_analysis::RoundWinReason::TimeRanOut) => view! { <span>Out of Time</span> }.into_view(),
-                    _ => view! {}.into_view(),
+                let (ct_won, t_won) = match &reason {
+                    Some(common::demo_analysis::RoundWinReason::TKilled) => (true, false),
+                    Some(common::demo_analysis::RoundWinReason::BombDefused) => (true, false),
+                    Some(common::demo_analysis::RoundWinReason::TimeRanOut) => (true, false),
+                    Some(common::demo_analysis::RoundWinReason::CTKilled) => (false, true),
+                    Some(common::demo_analysis::RoundWinReason::BombExploded) => (false, true),
+                    _ => (false, false)
                 };
-                let mut lower_symbol = match &reason {
-                    Some(common::demo_analysis::RoundWinReason::CTKilled) => view! { <span>Killed CTs</span> }.into_view(),
-                    Some(common::demo_analysis::RoundWinReason::BombExploded) => view! { <span>Exploded</span> }.into_view(),
-                    _ => view! {}.into_view(),
+
+                // Upper is CT by default and lower is T by default
+                let (mut upper_symbol, mut upper_won) = match &reason {
+                    Some(common::demo_analysis::RoundWinReason::TKilled) => (view! { <span>Killed Ts</span> }.into_view(), true),
+                    Some(common::demo_analysis::RoundWinReason::BombDefused) => (view! { <span>Defused</span> }.into_view(), true),
+                    Some(common::demo_analysis::RoundWinReason::TimeRanOut) => (view! { <span>Out of Time</span> }.into_view(), true),
+                    _ => (view! {}.into_view(), false),
+                };
+                let (mut lower_symbol, mut lower_won) = match &reason {
+                    Some(common::demo_analysis::RoundWinReason::CTKilled) => (view! { <span>Killed CTs</span> }.into_view(), true),
+                    Some(common::demo_analysis::RoundWinReason::BombExploded) => (view! { <span>Exploded</span> }.into_view(), true),
+                    _ => (view! {}.into_view(), false),
                 };
 
                 if (12..27).contains(&r) {
                     core::mem::swap(&mut upper_symbol, &mut lower_symbol);
+                    core::mem::swap(&mut upper_won, &mut lower_won);
                 }
 
                 view! {
                     class=style, 
-                    <div class="round_entry" style=format!("grid-column: {}; grid-row: 1", to_coloumn(r))> { upper_symbol } </div>
+                    <div 
+                        class="round_entry"
+                        style=format!("grid-column: {}; grid-row: 1", to_coloumn(r))
+                        class:ct_won=move || ct_won
+                        class:t_won=move || t_won
+                        class:won=move || upper_won
+                        class:lose=move || !upper_won
+                    >{ upper_symbol } </div>
                     <p on:click=set_round class="round_entry round_number" style=format!("grid-column: {}; grid-row: 2", to_coloumn(r))>{ r + 1 }</p>
-                    <div class="round_entry" style=format!("grid-column: {}; grid-row: 3", to_coloumn(r))> { lower_symbol } </div>
+                    <div
+                        class="round_entry"
+                        style=format!("grid-column: {}; grid-row: 3", to_coloumn(r))
+                        class:ct_won=move || ct_won
+                        class:t_won=move || t_won
+                        class:won=move || lower_won
+                        class:lose=move || !lower_won
+                    > { lower_symbol } </div>
                 }
             }).collect::<Vec<_>>()
     };
