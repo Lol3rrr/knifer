@@ -305,6 +305,7 @@ async fn heatmap(
     };
 
     let data: Vec<common::demo_analysis::PlayerHeatmap> = result.into_iter().map(|(player, heatmap)| {
+        let team = heatmap.team.clone();
         let mut heatmap: analysis::heatmap::HeatMap = serde_json::from_str(&heatmap.data).unwrap();
         heatmap.fit(minimap_coords.x_coord(0.0)..minimap_coords.x_coord(1024.0), minimap_coords.y_coord(1024.0)..minimap_coords.y_coord(0.0));
         let h_image = heatmap.as_image();
@@ -314,6 +315,7 @@ async fn heatmap(
 
         common::demo_analysis::PlayerHeatmap {
             name: player.name,
+            team,
             png_data: base64::prelude::BASE64_STANDARD.encode(buffer.into_inner()),
         }
     }).collect();

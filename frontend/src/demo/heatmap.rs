@@ -90,7 +90,7 @@ fn heatmap_view(heatmaps: Vec<common::demo_analysis::PlayerHeatmap>) -> impl lep
                 { (move |heatmaps: Vec<common::demo_analysis::PlayerHeatmap>| {
             heatmaps.iter().enumerate().map(|(idx, heatmap)| {
                 view! {
-                    <option value={idx}>{heatmap.name.clone()}</option>
+                    <option value={idx}>{ format!("[{}] {}", heatmap.team, heatmap.name) }</option>
                 }
             }).collect::<Vec<_>>()
         })(h1.clone())}

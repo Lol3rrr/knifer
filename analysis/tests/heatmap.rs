@@ -11,7 +11,7 @@ fn heatmap_nuke() {
     let config = heatmap::Config { cell_size: 5.0 };
     let result = heatmap::parse(&config, &input_bytes).unwrap();
 
-    assert_eq!(result.player_heatmaps.len(), 10);
+    assert_eq!(result.player_heatmaps.len(), 20);
 }
 
 #[test]
@@ -24,7 +24,7 @@ fn heatmap_inferno() {
     let config = heatmap::Config { cell_size: 5.0 };
     let result = heatmap::parse(&config, &input_bytes).unwrap();
 
-    assert_eq!(result.player_heatmaps.len(), 10);
+    assert_eq!(result.player_heatmaps.len(), 20);
 }
 
 #[test]
@@ -37,5 +37,5 @@ fn heatmap_dust2() {
     let config = heatmap::Config { cell_size: 5.0 };
     let result = heatmap::parse(&config, &input_bytes).unwrap();
 
-    assert_eq!(result.player_heatmaps.len(), 10);
+    assert_eq!(result.player_heatmaps.len(), 20);
 }

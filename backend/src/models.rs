@@ -95,6 +95,7 @@ pub struct AnalysisTask {
 pub struct DemoPlayerHeatmap {
     pub demo_id: String,
     pub steam_id: String,
+    pub team: String,
     pub data: String,
 }
 

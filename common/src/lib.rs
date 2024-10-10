@@ -35,6 +35,7 @@ pub mod demo_analysis {
     #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
     pub struct PlayerHeatmap {
         pub name: String,
+        pub team: String,
         pub png_data: String,
     }
 

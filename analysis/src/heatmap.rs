@@ -52,7 +52,7 @@ impl HeatMap {
 
 #[derive(Debug)]
 pub struct HeatMapOutput {
-    pub player_heatmaps: std::collections::HashMap<csdemo::UserId, HeatMap>,
+    pub player_heatmaps: std::collections::HashMap<(csdemo::UserId, String), HeatMap>,
     pub player_info: std::collections::HashMap<csdemo::UserId, csdemo::parser::Player>,
 }
 
@@ -96,8 +96,7 @@ pub fn parse(config: &Config, buf: &[u8]) -> Result<HeatMapOutput, ()> {
                         Some(csdemo::RawValue::I32(v)) => {
                             Some((PawnID::from(*v), pspawn.userid.unwrap()))
                         }
-                        other => {
-                            // tracing::info!("Unknown Pawn-ID: {:?}", other);
+                        _ => {
                             None
                         },
                     },
@@ -116,6 +115,7 @@ pub fn parse(config: &Config, buf: &[u8]) -> Result<HeatMapOutput, ()> {
         tmp
     };
 
+    let mut teams = std::collections::HashMap::new();
     let mut player_lifestate = std::collections::HashMap::<csdemo::UserId, u32>::new();
     let mut player_position = std::collections::HashMap::<csdemo::UserId, (f32, f32, f32)>::new();
     let mut player_cells = std::collections::HashMap::new();
@@ -128,6 +128,7 @@ pub fn parse(config: &Config, buf: &[u8]) -> Result<HeatMapOutput, ()> {
             config,
             tick_state,
             &pawn_ids,
+            &mut teams,
             &mut player_lifestate,
             &mut player_position,
             &mut player_cells,
@@ -149,22 +150,41 @@ fn process_tick(
     config: &Config,
     tick_state: &csdemo::parser::EntityTickStates,
     pawn_ids: &std::collections::HashMap<PawnID, csdemo::UserId>,
+    teams: &mut std::collections::HashMap<PawnID, String>,
     player_lifestate: &mut std::collections::HashMap<csdemo::UserId, u32>,
     player_position: &mut std::collections::HashMap<csdemo::UserId, (f32, f32, f32)>,
     player_cells: &mut std::collections::HashMap<csdemo::UserId, (u32, u32, u32)>,
-    heatmaps: &mut std::collections::HashMap<csdemo::UserId, HeatMap>,
+    heatmaps: &mut std::collections::HashMap<(csdemo::UserId, String), HeatMap>,
 ) {
     for entity_state in tick_state
         .states
         .iter()
-        .filter(|s| s.class.as_ref() == "CCSPlayerPawn")
+        .filter(|s| matches!(s.class.as_ref(), "CCSPlayerPawn" | "CCSTeam"))
     {
+        if entity_state.class.as_ref() == "CCSTeam" {
+            let raw_team_name = match entity_state.get_prop("CCSTeam.m_szTeamname").map(|p| match &p.value {
+                csdemo::parser::Variant::String(v) => Some(v),
+                _ => None,
+            }).flatten() {
+                Some(n) => n,
+                None => continue,
+            };
+
+            for prop in entity_state.props.iter().filter(|p| p.prop_info.prop_name.as_ref() == "CCSTeam.m_aPawns").filter_map(|p| p.value.as_u32().map(|v| PawnID::from(v))) {
+                teams.insert(prop, raw_team_name.clone());
+            }
+
+            continue;
+        }
+
         let pawn_id = PawnID::from(entity_state.id);
         let user_id = match pawn_ids.get(&pawn_id).cloned() {
             Some(id) => id,
-            None => {
-                continue
-            }
+            None => continue,
+        };
+        let team = match teams.get(&pawn_id).cloned() {
+            Some(t) => t,
+            None => continue,
         };
 
         let _inner_guard =
@@ -245,7 +265,7 @@ fn process_tick(
 
         // tracing::trace!("Coord (X, Y, Z): {:?} -> {:?}", (x_coord, y_coord, z_coord), (x_cell, y_cell));
 
-        let heatmap = heatmaps.entry(user_id.clone()).or_insert(HeatMap::new(config.cell_size));
+        let heatmap = heatmaps.entry((user_id.clone(), team)).or_insert(HeatMap::new(config.cell_size));
         heatmap.increment(x_cell, y_cell);
     }
 }

@@ -22,7 +22,7 @@ impl Analysis for HeatmapAnalysis {
     let result = analysis::heatmap::parse(&config, &mmap).unwrap();
 
     tracing::info!("Got {} Entity-Heatmaps", result.player_heatmaps.len());
-    let heatmap_result: Vec<_> = result.player_heatmaps.into_iter().filter_map(|(userid, heatmap)| {
+    let heatmap_result: Vec<_> = result.player_heatmaps.into_iter().filter_map(|((userid, team), heatmap)| {
         let player = match result.player_info.get(&userid) {
             Some(p) => p,
             None => {
@@ -31,15 +31,16 @@ impl Analysis for HeatmapAnalysis {
             }
         };
         
-        Some((player.xuid.to_string(), heatmap))
+        Some(((player.xuid.to_string(), team), heatmap))
     }).collect();
 
-        let player_heatmaps: Vec<_> = heatmap_result.into_iter().map(|(player, heatmap)| {
-            tracing::trace!("HeatMap for Player: {:?}", player);
+        let player_heatmaps: Vec<_> = heatmap_result.into_iter().map(|((player, team), heatmap)| {
+            tracing::trace!("HeatMap for Player: {:?} in Team {:?}", player, team);
 
             crate::models::DemoPlayerHeatmap {
                 demo_id: input.demoid.clone(),
                 steam_id: player,
+                team,
                 data: serde_json::to_string(&heatmap).unwrap(),
             }
         }).collect();
@@ -47,7 +48,7 @@ impl Analysis for HeatmapAnalysis {
         Ok(Box::new(move |connection| {
             let store_demo_player_heatmaps_query = diesel::dsl::insert_into(crate::schema::demo_heatmaps::dsl::demo_heatmaps)
             .values(player_heatmaps)
-            .on_conflict((crate::schema::demo_heatmaps::dsl::demo_id, crate::schema::demo_heatmaps::dsl::steam_id))
+            .on_conflict((crate::schema::demo_heatmaps::dsl::demo_id, crate::schema::demo_heatmaps::dsl::steam_id, crate::schema::demo_heatmaps::dsl::team))
             .do_update()
             .set(crate::schema::demo_heatmaps::dsl::data.eq(diesel::upsert::excluded(crate::schema::demo_heatmaps::dsl::data)));
 

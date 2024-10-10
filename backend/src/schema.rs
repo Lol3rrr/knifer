@@ -9,9 +9,10 @@ diesel::table! {
 }
 
 diesel::table! {
-    demo_heatmaps (demo_id, steam_id) {
+    demo_heatmaps (demo_id, steam_id, team) {
         demo_id -> Text,
         steam_id -> Text,
+        team -> Text,
         data -> Text,
     }
 }
