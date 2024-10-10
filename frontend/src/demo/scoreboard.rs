@@ -18,6 +18,8 @@ pub fn scoreboard() -> impl leptos::IntoView {
                 .unwrap()
         });
 
+    let (ordering, set_ordering) = create_signal::<orderings::Ordering>(orderings::DAMAGE);
+
     view! {
         <h2>Scoreboard</h2>
 
@@ -30,22 +32,55 @@ pub fn scoreboard() -> impl leptos::IntoView {
     }
 }
 
-fn damage_sorting(p1: &common::demo_analysis::ScoreBoardPlayer, p2: &common::demo_analysis::ScoreBoardPlayer) -> core::cmp::Ordering {
-    p2.damage.cmp(&p1.damage)
-}
-fn kill_sorting(p1: &common::demo_analysis::ScoreBoardPlayer, p2: &common::demo_analysis::ScoreBoardPlayer) -> core::cmp::Ordering {
-    p2.kills.cmp(&p1.kills)
-}
-fn assists_sorting(p1: &common::demo_analysis::ScoreBoardPlayer, p2: &common::demo_analysis::ScoreBoardPlayer) -> core::cmp::Ordering {
-    p2.assists.cmp(&p1.assists)
-}
-fn deaths_sorting(p1: &common::demo_analysis::ScoreBoardPlayer, p2: &common::demo_analysis::ScoreBoardPlayer) -> core::cmp::Ordering {
-    p2.deaths.cmp(&p1.deaths)
+mod orderings {
+    #[derive(Debug, Clone)]
+    pub struct Ordering {
+        name: SelectedStat,
+        pub sort_fn: fn(p1: &common::demo_analysis::ScoreBoardPlayer, p2: &common::demo_analysis::ScoreBoardPlayer) -> core::cmp::Ordering,
+    }
+
+    impl Ordering {
+        pub fn display_symbol(&self, stat: SelectedStat) -> &'static str {
+            if self.name == stat {
+                "↑"
+            } else {
+                "-"
+            }
+        }
+    }
+
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub enum SelectedStat {
+        Damage,
+        Kills,
+        Deaths,
+        Assists,
+    }
+
+    pub const DAMAGE: Ordering = Ordering {
+        name: SelectedStat::Damage,
+        sort_fn: |p1, p2| p2.damage.cmp(&p1.damage),
+    };
+
+    pub const KILLS: Ordering = Ordering {
+        name: SelectedStat::Kills,
+        sort_fn: |p1, p2| p2.kills.cmp(&p1.kills),
+    };
+
+    pub const DEATHS: Ordering = Ordering {
+        name: SelectedStat::Deaths,
+        sort_fn: |p1, p2| p2.deaths.cmp(&p1.deaths),
+    };
+
+    pub const ASSISTS: Ordering = Ordering {
+        name: SelectedStat::Assists,
+        sort_fn: |p1, p2| p2.assists.cmp(&p1.assists),
+    };
 }
 
 #[leptos::component]
 fn team_scoreboard(info: Resource<leptos_router::ParamsMap, common::demo_analysis::ScoreBoard>, team_name: String, part: fn(common::demo_analysis::ScoreBoard) -> Vec<common::demo_analysis::ScoreBoardPlayer>) -> impl IntoView {
-    let (ordering, set_ordering) = create_signal::<fn(&common::demo_analysis::ScoreBoardPlayer, &common::demo_analysis::ScoreBoardPlayer) -> core::cmp::Ordering>(damage_sorting);
+    let (ordering, set_ordering) = create_signal::<orderings::Ordering>(orderings::DAMAGE);
 
     let style = stylers::style! {
         "Team-Scoreboard",
@@ -70,24 +105,24 @@ fn team_scoreboard(info: Resource<leptos_router::ParamsMap, common::demo_analysi
                 <tr>
                     <th>Name</th>
                     <th on:click=move |_| {
-            set_ordering(kill_sorting);
-        }>Kills</th>
+            set_ordering(orderings::KILLS);
+        }>Kills { move || ordering().display_symbol(orderings::SelectedStat::Kills) }</th>
                     <th on:click=move |_| {
-            set_ordering(assists_sorting);
-        }>Assists</th>
+            set_ordering(orderings::ASSISTS);
+        }>Assists { move || ordering().display_symbol(orderings::SelectedStat::Assists) }</th>
                     <th on:click=move |_| {
-            set_ordering(deaths_sorting);
-        }>Deaths</th>
+            set_ordering(orderings::DEATHS);
+        }>Deaths { move || ordering().display_symbol(orderings::SelectedStat::Deaths) }</th>
                     <th on:click=move |_| {
-            set_ordering(damage_sorting);
-        }>Damage</th>
+            set_ordering(orderings::DAMAGE);
+        }>Damage { move || ordering().display_symbol(orderings::SelectedStat::Damage) }</th>
                 </tr>
         {
             move || {
                 let value = info.get().map(|v| part(v));
                 let mut players: Vec<_> = value.into_iter().flat_map(|v| v).collect();
                 let sorting = ordering.get();
-                players.sort_unstable_by(|p1, p2| sorting(p1, p2));
+                players.sort_unstable_by(|p1, p2| (sorting.sort_fn)(p1, p2));
 
                 players.into_iter().map(|s| {
                     view! {
