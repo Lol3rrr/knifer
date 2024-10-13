@@ -1,4 +1,4 @@
-FROM rust:1.81-bookworm
+FROM rust:1.81-bookworm AS builder
 
 RUN rustup default nightly
 RUN rustup target add wasm32-unknown-unknown
@@ -21,10 +21,23 @@ RUN ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
 
 RUN trunk build --release --locked -v
 
-WORKDIR /usr/src/knifer/backend
-RUN cargo build --release
+WORKDIR /usr/src/knifer/
 
-EXPOSE 8000
+ENV FRONTEND_DIST_DIR=/root/knifer/static
+RUN cargo build --release -p backend
 
-WORKDIR /usr/src/knifer
-CMD ["./target/release/backend"]
+FROM debian:bookworm
+
+#
+RUN apt update
+Run apt install libssl3 ca-certificates -y
+
+WORKDIR /root/knifer
+
+COPY --from=builder /usr/src/knifer/frontend/dist/ /root/knifer/static
+COPY --from=builder /usr/src/knifer/target/release/backend /root/knifer/backend
+
+EXPOSE 3000
+
+WORKDIR /root/knifer
+ENTRYPOINT ["/root/knifer/backend"]
