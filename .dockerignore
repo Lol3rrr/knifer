@@ -1,0 +1,6 @@
+target/
+uploads/
+backend/uploads/
+.git/
+*.dem
+testfiles/

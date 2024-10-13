@@ -19,7 +19,7 @@ struct CliArgs {
     analysis: bool,
 }
 
-#[tokio::main(flavor = "current_thread")]
+#[tokio::main(flavor = "multi_thread")]
 async fn main() {
     use clap::Parser;
 
@@ -41,7 +41,10 @@ async fn main() {
 
     let mut component_set = tokio::task::JoinSet::new();
 
+    tracing::info!("Starting modules");
     if args.api {
+        tracing::info!("Enabled API module");
+
         let steam_api_key = match std::env::var("STEAM_API_KEY") {
             Ok(s) => s,
             Err(e) => {
@@ -53,8 +56,11 @@ async fn main() {
         component_set.spawn(backend::run_api(args.upload_folder.clone(), steam_api_key));
     }
     if args.analysis {
+        tracing::info!("Enabled Analysis module");
+
         component_set.spawn(backend::run_analysis(args.upload_folder.clone()));
     }
+    tracing::info!("Started modules");
 
     component_set.join_all().await;
 }

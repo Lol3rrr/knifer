@@ -61,6 +61,9 @@ pub async fn run_api(
         tokio::fs::create_dir_all(&upload_folder).await.unwrap();
     }
 
+    let serve_dir = option_env!("FRONTEND_DIST_DIR").unwrap_or("../frontend/dist/");
+    tracing::debug!("Serving static files from {:?}", serve_dir);
+
     let router = axum::Router::new()
         .nest(
             "/api/",
@@ -75,10 +78,13 @@ pub async fn run_api(
         .layer(session_layer)
         .nest_service(
             "/",
-            tower_http::services::ServeDir::new("../frontend/dist/"),
+            tower_http::services::ServeDir::new(serve_dir),
         );
 
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
+    let listen_addr = std::net::SocketAddr::new(std::net::IpAddr::V4(std::net::Ipv4Addr::new(0, 0, 0, 0)), 3000);
+    tracing::info!("Listening on Addr: {:?}", listen_addr);
+
+    let listener = tokio::net::TcpListener::bind(listen_addr).await.unwrap();
     axum::serve(listener, router).await.unwrap();
 }
 

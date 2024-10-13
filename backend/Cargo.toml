@@ -9,9 +9,9 @@ axum = { version = "0.7.5", features = ["multipart"] }
 serde = { version = "1.0.210", features = ["derive"] }
 steam-openid = "0.2.0"
 time = { version = "0.3.36", features = ["formatting", "parsing"] }
-tokio = { version = "1.40.0", features = ["rt", "macros", "net", "mio"] }
+tokio = { version = "1.40.0", features = ["rt", "macros", "net", "mio", "rt-multi-thread"] }
 tower-sessions = "0.13.0"
-tower-http = { version = "0.5", features = ["fs"] }
+tower-http = { version = "0.6", features = ["fs"] }
 tracing = { version = "0.1.40", features = ["async-await"] }
 tracing-subscriber = "0.3.18"
 futures-util = "0.3"
@@ -21,7 +21,7 @@ diesel-async = { version = "0.5", features = ["postgres"] }
 serde_json = "1.0.128"
 diesel_async_migrations = { version = "0.15" }
 
-reqwest = { version = "0.12", features = ["json"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "charset", "json"] }
 
 common = { path = "../common/" }
 analysis = { path = "../analysis/" }
