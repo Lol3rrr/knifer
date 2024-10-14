@@ -11,6 +11,24 @@ fn endofgame_nuke() {
 
     let expected = endofgame::EndOfGame {
         map: "de_nuke".to_owned(),
+        teams: [
+            (
+                3,
+                endofgame::TeamInfo {
+                    name: "CT".to_owned(),
+                    score: 8,
+                },
+            ),
+            (
+                2,
+                endofgame::TeamInfo {
+                    name: "TERRORIST".to_owned(),
+                    score: 13,
+                },
+            ),
+        ]
+        .into_iter()
+        .collect(),
         players: vec![
             (
                 endofgame::PlayerInfo {
@@ -198,9 +216,6 @@ fn endofgame_nuke() {
             ),
         ],
     };
-
-    // TODO
-    // Add stats for rest of players
 
     assert_eq!(result, expected);
 }

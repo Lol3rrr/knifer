@@ -29,20 +29,19 @@ impl HeatMap {
     }
 
     fn increment(&mut self, x: usize, y: usize) {
-        if self.rows.len() <= y  {
-                self.rows.resize(y + 1, Vec::new());
-            }
+        if self.rows.len() <= y {
+            self.rows.resize(y + 1, Vec::new());
+        }
 
-            self.max_y = self.max_y.max(y);
-            let row = self.rows.get_mut(y ).unwrap();
+        self.max_y = self.max_y.max(y);
+        let row = self.rows.get_mut(y).unwrap();
 
         if row.len() <= x {
-                row.resize(x + 1, 0);
-            }
+            row.resize(x + 1, 0);
+        }
 
-            self.max_x = self.max_x.max(x);
-            let cell = row.get_mut(x).unwrap();
-
+        self.max_x = self.max_x.max(x);
+        let cell = row.get_mut(x).unwrap();
 
         *cell += 1;
 
@@ -87,26 +86,26 @@ pub fn parse(config: &Config, buf: &[u8]) -> Result<HeatMapOutput, ()> {
     .map_err(|e| ())?;
 
     let pawn_ids = {
-        let mut tmp = std::collections::HashMap::<PawnID,_>::new();
-        
+        let mut tmp = std::collections::HashMap::<PawnID, _>::new();
+
         for event in output.events.iter() {
             let entry = match event {
                 csdemo::DemoEvent::GameEvent(ge) => match ge.as_ref() {
-                    csdemo::game_event::GameEvent::PlayerSpawn(pspawn) => match pspawn.userid_pawn.as_ref() {
-                        Some(csdemo::RawValue::I32(v)) => {
-                            Some((PawnID::from(*v), pspawn.userid.unwrap()))
+                    csdemo::game_event::GameEvent::PlayerSpawn(pspawn) => {
+                        match pspawn.userid_pawn.as_ref() {
+                            Some(csdemo::RawValue::I32(v)) => {
+                                Some((PawnID::from(*v), pspawn.userid.unwrap()))
+                            }
+                            _ => None,
                         }
-                        _ => {
-                            None
-                        },
-                    },
+                    }
                     _ => None,
                 },
                 _ => None,
             };
 
             if let Some((pawn, userid)) = entry {
-                if let Some(previous) = tmp.insert(pawn, userid){
+                if let Some(previous) = tmp.insert(pawn, userid) {
                     assert_eq!(previous, userid);
                 }
             }
@@ -162,15 +161,24 @@ fn process_tick(
         .filter(|s| matches!(s.class.as_ref(), "CCSPlayerPawn" | "CCSTeam"))
     {
         if entity_state.class.as_ref() == "CCSTeam" {
-            let raw_team_name = match entity_state.get_prop("CCSTeam.m_szTeamname").map(|p| match &p.value {
-                csdemo::parser::Variant::String(v) => Some(v),
-                _ => None,
-            }).flatten() {
+            let raw_team_name = match entity_state
+                .get_prop("CCSTeam.m_szTeamname")
+                .map(|p| match &p.value {
+                    csdemo::parser::Variant::String(v) => Some(v),
+                    _ => None,
+                })
+                .flatten()
+            {
                 Some(n) => n,
                 None => continue,
             };
 
-            for prop in entity_state.props.iter().filter(|p| p.prop_info.prop_name.as_ref() == "CCSTeam.m_aPawns").filter_map(|p| p.value.as_u32().map(|v| PawnID::from(v))) {
+            for prop in entity_state
+                .props
+                .iter()
+                .filter(|p| p.prop_info.prop_name.as_ref() == "CCSTeam.m_aPawns")
+                .filter_map(|p| p.value.as_u32().map(|v| PawnID::from(v)))
+            {
                 teams.insert(prop, raw_team_name.clone());
             }
 
@@ -187,35 +195,67 @@ fn process_tick(
             None => continue,
         };
 
-        let _inner_guard =
-            tracing::trace_span!("Entity", entity_id=?entity_state.id).entered();
+        let _inner_guard = tracing::trace_span!("Entity", entity_id=?entity_state.id).entered();
 
-        let x_cell = match entity_state.get_prop("CCSPlayerPawn.CBodyComponentBaseAnimGraph.m_cellX").map(|prop| prop.value.as_u32()).flatten() {
+        let x_cell = match entity_state
+            .get_prop("CCSPlayerPawn.CBodyComponentBaseAnimGraph.m_cellX")
+            .map(|prop| prop.value.as_u32())
+            .flatten()
+        {
             Some(c) => c,
             None => player_cells.get(&user_id).map(|(x, _, _)| *x).unwrap_or(0),
         };
-        let y_cell = match entity_state.get_prop("CCSPlayerPawn.CBodyComponentBaseAnimGraph.m_cellY").map(|prop| prop.value.as_u32()).flatten() {
+        let y_cell = match entity_state
+            .get_prop("CCSPlayerPawn.CBodyComponentBaseAnimGraph.m_cellY")
+            .map(|prop| prop.value.as_u32())
+            .flatten()
+        {
             Some(c) => c,
             None => player_cells.get(&user_id).map(|(_, y, _)| *y).unwrap_or(0),
         };
-        let z_cell = match entity_state.get_prop("CCSPlayerPawn.CBodyComponentBaseAnimGraph.m_cellZ").map(|prop| prop.value.as_u32()).flatten() {
+        let z_cell = match entity_state
+            .get_prop("CCSPlayerPawn.CBodyComponentBaseAnimGraph.m_cellZ")
+            .map(|prop| prop.value.as_u32())
+            .flatten()
+        {
             Some(c) => c,
             None => player_cells.get(&user_id).map(|(_, _, z)| *z).unwrap_or(0),
         };
 
         player_cells.insert(user_id, (x_cell, y_cell, z_cell));
 
-        let x_coord = match entity_state.get_prop("CCSPlayerPawn.CBodyComponentBaseAnimGraph.m_vecX").map(|prop| prop.value.as_f32()).flatten() {
+        let x_coord = match entity_state
+            .get_prop("CCSPlayerPawn.CBodyComponentBaseAnimGraph.m_vecX")
+            .map(|prop| prop.value.as_f32())
+            .flatten()
+        {
             Some(c) => c,
-            None => player_position.get(&user_id).map(|(x, _, _)| *x).unwrap_or(0.0),
+            None => player_position
+                .get(&user_id)
+                .map(|(x, _, _)| *x)
+                .unwrap_or(0.0),
         };
-        let y_coord = match entity_state.get_prop("CCSPlayerPawn.CBodyComponentBaseAnimGraph.m_vecY").map(|prop| prop.value.as_f32()).flatten() {
+        let y_coord = match entity_state
+            .get_prop("CCSPlayerPawn.CBodyComponentBaseAnimGraph.m_vecY")
+            .map(|prop| prop.value.as_f32())
+            .flatten()
+        {
             Some(c) => c,
-            None => player_position.get(&user_id).map(|(_, y, _)| *y).unwrap_or(0.0),
+            None => player_position
+                .get(&user_id)
+                .map(|(_, y, _)| *y)
+                .unwrap_or(0.0),
         };
-        let z_coord = match entity_state.get_prop("CCSPlayerPawn.CBodyComponentBaseAnimGraph.m_vecZ").map(|prop| prop.value.as_f32()).flatten() {
+        let z_coord = match entity_state
+            .get_prop("CCSPlayerPawn.CBodyComponentBaseAnimGraph.m_vecZ")
+            .map(|prop| prop.value.as_f32())
+            .flatten()
+        {
             Some(c) => c,
-            None => player_position.get(&user_id).map(|(_, _, z)| *z).unwrap_or(0.0),
+            None => player_position
+                .get(&user_id)
+                .map(|(_, _, z)| *z)
+                .unwrap_or(0.0),
         };
 
         player_position.insert(user_id, (x_coord, y_coord, z_coord));
@@ -224,9 +264,9 @@ fn process_tick(
         assert!(y_coord >= 0.0);
         assert!(z_coord >= 0.0);
 
-        let x_cell_coord = ((x_cell as f32 * (1 << 9) as f32)) as f32;
-        let y_cell_coord = ((y_cell as f32 * (1 << 9) as f32)) as f32;
-        let z_cell_coord = ((z_cell as f32 * (1 << 9) as f32)) as f32;
+        let x_cell_coord = (x_cell as f32 * (1 << 9) as f32) as f32;
+        let y_cell_coord = (y_cell as f32 * (1 << 9) as f32) as f32;
+        let z_cell_coord = (z_cell as f32 * (1 << 9) as f32) as f32;
 
         let x_coord = x_cell_coord + x_coord;
         let y_coord = y_cell_coord + y_coord;
@@ -236,7 +276,7 @@ fn process_tick(
         assert!(y_coord >= 0.0);
         assert!(z_coord >= 0.0);
 
-        let x_cell = (x_coord  / config.cell_size) as usize;
+        let x_cell = (x_coord / config.cell_size) as usize;
         let y_cell = (y_coord / config.cell_size) as usize;
 
         let n_lifestate = entity_state.props.iter().find_map(|prop| {
@@ -265,7 +305,9 @@ fn process_tick(
 
         // tracing::trace!("Coord (X, Y, Z): {:?} -> {:?}", (x_coord, y_coord, z_coord), (x_cell, y_cell));
 
-        let heatmap = heatmaps.entry((user_id.clone(), team)).or_insert(HeatMap::new(config.cell_size));
+        let heatmap = heatmaps
+            .entry((user_id.clone(), team))
+            .or_insert(HeatMap::new(config.cell_size));
         heatmap.increment(x_cell, y_cell);
     }
 }
@@ -276,7 +318,7 @@ impl core::fmt::Display for HeatMap {
 
         for row in self.rows.iter() {
             for cell in row.iter().copied() {
-                write!(f, "{: ^width$} ", cell, width=size)?;
+                write!(f, "{: ^width$} ", cell, width = size)?;
             }
             writeln!(f)?;
         }
@@ -288,22 +330,45 @@ impl core::fmt::Display for HeatMap {
 impl HeatMap {
     pub fn coords(&self) -> ((f32, f32), (f32, f32)) {
         (
-            (self.min_x as f32 * self.block_size - MAX_COORD, self.max_x as f32 * self.block_size - MAX_COORD),
-            (self.min_y as f32 * self.block_size - MAX_COORD, self.max_y as f32 * self.block_size - MAX_COORD)
+            (
+                self.min_x as f32 * self.block_size - MAX_COORD,
+                self.max_x as f32 * self.block_size - MAX_COORD,
+            ),
+            (
+                self.min_y as f32 * self.block_size - MAX_COORD,
+                self.max_y as f32 * self.block_size - MAX_COORD,
+            ),
         )
     }
 
     pub fn as_image(&self) -> image::RgbImage {
         use colors_transform::Color;
 
-        let mut buffer = image::RgbImage::new((self.max_x - self.min_x) as u32 + 1, (self.max_y - self.min_y) as u32 + 1);
+        let mut buffer = image::RgbImage::new(
+            (self.max_x - self.min_x) as u32 + 1,
+            (self.max_y - self.min_y) as u32 + 1,
+        );
 
         for (y, row) in self.rows.iter().rev().enumerate() {
-            for (x, cell) in row.iter().copied().chain(core::iter::repeat(0)).enumerate().take(self.max_x - self.min_x) {
-                let scaled = (1.0/(1.0 + (cell as f32))) * 240.0;
+            for (x, cell) in row
+                .iter()
+                .copied()
+                .chain(core::iter::repeat(0))
+                .enumerate()
+                .take(self.max_x - self.min_x)
+            {
+                let scaled = (1.0 / (1.0 + (cell as f32))) * 240.0;
                 let raw_rgb = colors_transform::Hsl::from(scaled, 100.0, 50.0).to_rgb();
 
-                buffer.put_pixel(x as u32, y as u32, image::Rgb([raw_rgb.get_red() as u8, raw_rgb.get_green() as u8, raw_rgb.get_blue() as u8]))
+                buffer.put_pixel(
+                    x as u32,
+                    y as u32,
+                    image::Rgb([
+                        raw_rgb.get_red() as u8,
+                        raw_rgb.get_green() as u8,
+                        raw_rgb.get_blue() as u8,
+                    ]),
+                )
             }
         }
 
@@ -311,7 +376,7 @@ impl HeatMap {
     }
 
     pub fn fit(&mut self, xs: core::ops::Range<f32>, ys: core::ops::Range<f32>) {
-        let min_x = (xs.start / self.block_size - self.min_x as f32) as usize;       
+        let min_x = (xs.start / self.block_size - self.min_x as f32) as usize;
         let min_y = (ys.start / self.block_size - self.min_y as f32) as usize;
 
         let _ = self.rows.drain(0..min_y);
@@ -352,18 +417,12 @@ mod tests {
         assert_eq!(input.max_y, 3);
 
         assert_eq!(
-            &vec![
-                vec![],
-                vec![],
-                vec![0, 0, 1],
-                vec![0, 0, 0, 1]
-            ],
+            &vec![vec![], vec![], vec![0, 0, 1], vec![0, 0, 0, 1]],
             &input.rows
         );
 
         input.fit(2.0..10.0, 2.0..10.0);
 
-        
         assert_eq!(
             &vec![
                 vec![0, 0, 0, 0],
@@ -388,23 +447,12 @@ mod tests {
         assert_eq!(input.max_y, 3);
 
         assert_eq!(
-            &vec![
-                vec![],
-                vec![],
-                vec![0, 0, 1],
-                vec![0, 0, 0, 1]
-            ],
+            &vec![vec![], vec![], vec![0, 0, 1], vec![0, 0, 0, 1]],
             &input.rows
         );
 
         input.fit(6.0..10.0, 6.0..10.0);
 
-        assert_eq!(
-            &vec![
-                vec![1, 0],
-                vec![0, 0]
-            ],
-            &input.rows
-        );
+        assert_eq!(&vec![vec![1, 0], vec![0, 0]], &input.rows);
     }
 }

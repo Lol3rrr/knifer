@@ -60,28 +60,29 @@ pub struct Round {
 pub enum RoundEvent {
     BombPlanted,
     BombDefused,
-    Kill {
-        attacker: u64,
-        died: u64,
-    },
+    Kill { attacker: u64, died: u64 },
 }
 
 #[derive(Debug)]
 pub struct PerRound {
-    pub rounds: Vec<Round>
+    pub rounds: Vec<Round>,
 }
 
 pub fn parse(buf: &[u8]) -> Result<PerRound, ()> {
     let tmp = csdemo::Container::parse(buf).map_err(|e| ())?;
     let output = csdemo::parser::parse(
         csdemo::FrameIterator::parse(tmp.inner),
-        csdemo::parser::EntityFilter::all()
-    ).map_err(|e| ())?;
+        csdemo::parser::EntityFilter::all(),
+    )
+    .map_err(|e| ())?;
 
     let mut rounds: Vec<Round> = Vec::new();
     for tick in output.entity_states.ticks.iter() {
         for state in tick.states.iter() {
-            let round_start_count = state.get_prop("CCSGameRulesProxy.CCSGameRules.m_nRoundStartCount").map(|v| v.value.as_u32()).flatten();
+            let round_start_count = state
+                .get_prop("CCSGameRulesProxy.CCSGameRules.m_nRoundStartCount")
+                .map(|v| v.value.as_u32())
+                .flatten();
             if let Some(round_start_count) = round_start_count {
                 if rounds.len() < (round_start_count - 1) as usize {
                     rounds.push(Round {
@@ -93,21 +94,32 @@ pub fn parse(buf: &[u8]) -> Result<PerRound, ()> {
                 }
             }
 
-            let round_end_count = state.get_prop("CCSGameRulesProxy.CCSGameRules.m_nRoundEndCount").map(|v| v.value.as_u32()).flatten();
+            let round_end_count = state
+                .get_prop("CCSGameRulesProxy.CCSGameRules.m_nRoundEndCount")
+                .map(|v| v.value.as_u32())
+                .flatten();
             if let Some(round_end_count) = round_end_count {
                 if rounds.len() == (round_end_count - 1) as usize {
                     rounds.last_mut().unwrap().end = tick.tick;
                 }
             }
 
-            let total_rounds_played = state.get_prop("CCSGameRulesProxy.CCSGameRules.m_totalRoundsPlayed").map(|v| v.value.as_i32()).flatten();
+            let total_rounds_played = state
+                .get_prop("CCSGameRulesProxy.CCSGameRules.m_totalRoundsPlayed")
+                .map(|v| v.value.as_i32())
+                .flatten();
             if let Some(total_rounds_played) = total_rounds_played {
                 debug_assert_eq!(total_rounds_played, rounds.len() as i32);
             }
 
-
             if state.class.as_ref() == "CCSGameRulesProxy" {
-                let round_win_reason = state.get_prop("CCSGameRulesProxy.CCSGameRules.m_eRoundWinReason").map(|p| p.value.as_i32()).flatten().map(|v| ROUND_WIN_REASON.get(&v)).flatten().filter(|r| !matches!(r, WinReason::StillInProgress));
+                let round_win_reason = state
+                    .get_prop("CCSGameRulesProxy.CCSGameRules.m_eRoundWinReason")
+                    .map(|p| p.value.as_i32())
+                    .flatten()
+                    .map(|v| ROUND_WIN_REASON.get(&v))
+                    .flatten()
+                    .filter(|r| !matches!(r, WinReason::StillInProgress));
                 if let Some(round_win_reason) = round_win_reason {
                     rounds.last_mut().unwrap().winreason = round_win_reason.clone();
                 }
@@ -138,12 +150,8 @@ pub fn parse(buf: &[u8]) -> Result<PerRound, ()> {
                 }
 
                 let event = match ge.as_ref() {
-                    csdemo::game_event::GameEvent::BombPlanted(planted) => {
-                        RoundEvent::BombPlanted
-                    }
-                    csdemo::game_event::GameEvent::BombDefused(defused) => {
-                        RoundEvent::BombDefused
-                    }
+                    csdemo::game_event::GameEvent::BombPlanted(planted) => RoundEvent::BombPlanted,
+                    csdemo::game_event::GameEvent::BombDefused(defused) => RoundEvent::BombDefused,
                     csdemo::game_event::GameEvent::PlayerDeath(death) => {
                         let died = match death.userid {
                             Some(d) => d,
@@ -171,7 +179,5 @@ pub fn parse(buf: &[u8]) -> Result<PerRound, ()> {
         };
     }
 
-    Ok(PerRound {
-        rounds,
-    })
+    Ok(PerRound { rounds })
 }

@@ -1,7 +1,16 @@
+use std::collections::HashMap;
+
 #[derive(Debug, PartialEq)]
 pub struct EndOfGame {
     pub map: String,
     pub players: Vec<(PlayerInfo, PlayerStats)>,
+    pub teams: HashMap<u32, TeamInfo>,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct TeamInfo {
+    pub name: String,
+    pub score: usize,
 }
 
 #[derive(Debug, PartialEq)]
@@ -28,7 +37,7 @@ pub fn parse(buf: &[u8]) -> Result<EndOfGame, ()> {
     let tmp = csdemo::Container::parse(buf).map_err(|e| ())?;
     let output = csdemo::parser::parse(
         csdemo::FrameIterator::parse(tmp.inner),
-        csdemo::parser::EntityFilter::disabled(),
+        csdemo::parser::EntityFilter::all(),
     )
     .map_err(|e| ())?;
 
@@ -69,14 +78,64 @@ pub fn parse(buf: &[u8]) -> Result<EndOfGame, ()> {
                             &mut player_life,
                         );
                     }
-                    csdemo::game_event::GameEvent::PlayerHurt(phurt) => {
-                        // println!("Untracked: {:?}", phurt);
-                    }
                     _ => {}
                 };
             }
             _ => {}
         };
+    }
+
+    let mut teams = HashMap::new();
+    let mut entity_to_team = HashMap::new();
+    let mut entity_to_name = HashMap::<_, String>::new();
+    for tick_state in output.entity_states.ticks {
+        for state in tick_state.states {
+            if state.class.as_ref() != "CCSTeam" {
+                continue;
+            }
+
+            let team = match state
+                .get_prop("CCSTeam.m_iTeamNum")
+                .map(|p| p.value.as_u32())
+                .flatten()
+            {
+                Some(team) => {
+                    entity_to_team.insert(state.id, team.clone());
+                    team
+                }
+                None => match entity_to_team.get(&state.id) {
+                    Some(t) => t.clone(),
+                    None => continue,
+                },
+            };
+
+            let name = match entity_to_name.get(&state.id) {
+                Some(n) => n.to_owned(),
+                None => match state
+                    .get_prop("CCSTeam.m_szTeamname")
+                    .map(|p| match &p.value {
+                        csdemo::parser::Variant::String(v) => Some(v.to_owned()),
+                        _ => None,
+                    })
+                    .flatten()
+                {
+                    Some(n) => {
+                        entity_to_name.insert(state.id, n.clone());
+                        n
+                    }
+                    None => continue,
+                },
+            };
+
+            if let Some(score) = state
+                .get_prop("CCSTeam.m_iScore")
+                .map(|p| p.value.as_i32())
+                .flatten()
+                .map(|v| v as usize)
+            {
+                teams.insert(team, TeamInfo { name, score });
+            }
+        }
     }
 
     let mut players: Vec<_> = player_stats
@@ -100,7 +159,11 @@ pub fn parse(buf: &[u8]) -> Result<EndOfGame, ()> {
 
     let map = header.map_name().to_owned();
 
-    Ok(EndOfGame { map, players })
+    Ok(EndOfGame {
+        map,
+        players,
+        teams,
+    })
 }
 
 fn player_death(
