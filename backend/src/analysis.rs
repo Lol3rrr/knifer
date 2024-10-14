@@ -107,6 +107,13 @@ pub struct AnalysisInput {
 pub struct BaseInfo {
     pub map: String,
     pub players: Vec<(BasePlayerInfo, BasePlayerStats)>,
+    pub teams: Vec<(u32, BaseTeamInfo)>
+}
+
+#[derive(Debug)]
+pub struct BaseTeamInfo {
+    pub score: usize,
+    pub name: String,
 }
 
 #[derive(Debug)]

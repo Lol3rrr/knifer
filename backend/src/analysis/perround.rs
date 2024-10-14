@@ -10,22 +10,41 @@ impl PerRoundAnalysis {
 
 impl Analysis for PerRoundAnalysis {
     #[tracing::instrument(name = "PerRoundAnalysis", skip(self, input))]
-    fn analyse(&self, input: AnalysisInput) -> Result<Box<dyn FnOnce(&mut diesel_async::pg::AsyncPgConnection) -> core::pin::Pin<Box<(dyn core::future::Future<Output = Result<(), diesel::result::Error>> + Send + '_)>> + Send>, ()> {
+    fn analyse(
+        &self,
+        input: AnalysisInput,
+    ) -> Result<
+        Box<
+            dyn FnOnce(
+                    &mut diesel_async::pg::AsyncPgConnection,
+                ) -> core::pin::Pin<
+                    Box<
+                        (dyn core::future::Future<Output = Result<(), diesel::result::Error>>
+                             + Send
+                             + '_),
+                    >,
+                > + Send,
+        >,
+        (),
+    > {
         let file = std::fs::File::open(&input.path).unwrap();
         let mmap = unsafe { memmap2::MmapOptions::new().map(&file).unwrap() };
 
         let result = analysis::perround::parse(&mmap).unwrap();
 
-        let values: Vec<crate::models::DemoRound> = result.rounds.into_iter().enumerate().map(|(i, r)| {
-            crate::models::DemoRound {
+        let values: Vec<crate::models::DemoRound> = result
+            .rounds
+            .into_iter()
+            .enumerate()
+            .map(|(i, r)| crate::models::DemoRound {
                 demo_id: input.demoid.clone(),
                 round_number: i as i16,
                 start_tick: r.start as i64,
                 end_tick: r.end as i64,
                 win_reason: serde_json::to_string(&r.winreason).unwrap(),
                 events: serde_json::to_value(&r.events).unwrap(),
-            }
-        }).collect();
+            })
+            .collect();
 
         Ok(Box::new(move |connection| {
             Box::pin(async move {

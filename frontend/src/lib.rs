@@ -18,7 +18,7 @@ pub fn demo_list_entry(demo: common::BaseDemoInfo) -> impl leptos::IntoView {
     view! {
         <li>
             <A href=format!("demo/{}/scoreboard", demo.id)>
-                <span>{demo.map} - {demo.id}</span>
+                <span>{demo.map} - {demo.id} - {demo.team2_score}:{demo.team3_score}</span>
             </A>
         </li>
     }

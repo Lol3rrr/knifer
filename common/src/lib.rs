@@ -2,6 +2,8 @@
 pub struct BaseDemoInfo {
     pub id: String,
     pub map: String,
+    pub team2_score: i16,
+    pub team3_score: i16,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]

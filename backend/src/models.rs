@@ -23,7 +23,7 @@ pub struct NewDemo {
 pub struct Demo {
     pub steam_id: String,
     pub demo_id: String,
-    pub uploaded_at: diesel::data_types::PgTimestamp
+    pub uploaded_at: diesel::data_types::PgTimestamp,
 }
 
 #[derive(Queryable, Selectable, Insertable, Debug)]
@@ -63,6 +63,16 @@ pub struct DemoPlayerStats {
     pub deaths: i16,
     pub damage: i16,
     pub assists: i16,
+}
+
+#[derive(Queryable, Selectable, Insertable, Debug)]
+#[diesel(table_name = crate::schema::demo_teams)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct DemoTeam {
+    pub demo_id: String,
+    pub team: i16,
+    pub end_score: i16,
+    pub start_name: String,
 }
 
 #[derive(Queryable, Selectable, Insertable, Debug)]

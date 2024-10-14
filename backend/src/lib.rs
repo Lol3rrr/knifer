@@ -76,12 +76,12 @@ pub async fn run_api(
             }),
         )
         .layer(session_layer)
-        .nest_service(
-            "/",
-            tower_http::services::ServeDir::new(serve_dir),
-        );
+        .nest_service("/", tower_http::services::ServeDir::new(serve_dir));
 
-    let listen_addr = std::net::SocketAddr::new(std::net::IpAddr::V4(std::net::Ipv4Addr::new(0, 0, 0, 0)), 3000);
+    let listen_addr = std::net::SocketAddr::new(
+        std::net::IpAddr::V4(std::net::Ipv4Addr::new(0, 0, 0, 0)),
+        3000,
+    );
     tracing::info!("Listening on Addr: {:?}", listen_addr);
 
     let listener = tokio::net::TcpListener::bind(listen_addr).await.unwrap();
@@ -110,17 +110,18 @@ pub async fn run_analysis(upload_folder: impl Into<std::path::PathBuf>) {
         let mut store_result_fns = Vec::new();
         for analysis in analysis::ANALYSIS_METHODS.iter().map(|a| a.clone()) {
             let input = input.clone();
-            let store_result = match tokio::task::spawn_blocking(move || analysis.analyse(input)).await {
-                Ok(Ok(r)) => r,
-                Ok(Err(e)) => {
-                    tracing::error!("Analysis failed: {:?}", e);
-                    continue;
-                }
-                Err(e) => {
-                    tracing::error!("Joining Task: {:?}", e);
-                    continue;
-                }
-            };
+            let store_result =
+                match tokio::task::spawn_blocking(move || analysis.analyse(input)).await {
+                    Ok(Ok(r)) => r,
+                    Ok(Err(e)) => {
+                        tracing::error!("Analysis failed: {:?}", e);
+                        continue;
+                    }
+                    Err(e) => {
+                        tracing::error!("Joining Task: {:?}", e);
+                        continue;
+                    }
+                };
 
             store_result_fns.push(store_result);
         }

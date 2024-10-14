@@ -27,3 +27,11 @@ CREATE TABLE IF NOT EXISTS demo_player_stats (
   assists int2 NOT NULL,
   PRIMARY KEY (demo_id, steam_id)
 );
+
+CREATE TABLE IF NOT EXISTS demo_teams (
+  demo_id TEXT NOT NULL,
+  team int2 NOT NULL,
+  end_score int2 NOT NULL,
+  start_name TEXT NOT NULL,
+  PRIMARY KEY (demo_id, team)
+);

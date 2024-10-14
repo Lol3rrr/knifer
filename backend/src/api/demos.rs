@@ -41,28 +41,46 @@ async fn list(
     tracing::info!("SteamID: {:?}", steam_id);
 
     let query = crate::schema::demos::dsl::demos
-        .inner_join(crate::schema::demo_info::table.on(
-            crate::schema::demos::dsl::demo_id.eq(crate::schema::demo_info::dsl::demo_id),
-        ))
+        .inner_join(
+            crate::schema::demo_info::table
+                .on(crate::schema::demos::dsl::demo_id.eq(crate::schema::demo_info::dsl::demo_id)),
+        )
+        .inner_join(
+            crate::schema::demo_teams::table
+                .on(crate::schema::demos::dsl::demo_id.eq(crate::schema::demo_teams::dsl::demo_id)),
+        )
         .select((
             crate::models::Demo::as_select(),
             crate::models::DemoInfo::as_select(),
+            crate::models::DemoTeam::as_select(),
         ))
         .filter(crate::schema::demos::dsl::steam_id.eq(steam_id.to_string()));
-    let results: Vec<(crate::models::Demo, crate::models::DemoInfo)> =
+    let results: Vec<(crate::models::Demo, crate::models::DemoInfo, crate::models::DemoTeam)> =
         query.load(&mut crate::db_connection().await).await.unwrap();
+    
+    let mut demos = std::collections::HashMap::new();
+    for (demo, info, team) in results.into_iter() {
+        let entry = demos.entry(demo.demo_id.clone()).or_insert(common::BaseDemoInfo {
+            id: demo.demo_id,
+            map: info.map,
+            team2_score: 0,
+            team3_score: 0,
+        });
 
-    Ok(axum::response::Json(
-        results
-            .into_iter()
-            .map(|(demo, info)| {
-                common::BaseDemoInfo {
-                    id: demo.demo_id,
-                    map: info.map,
-                }
-            })
-            .collect::<Vec<_>>(),
-    ))
+        if team.team == 2 {
+            entry.team2_score = team.end_score;
+        } else if team.team == 3 {
+            entry.team3_score = team.end_score;
+        } else {
+            tracing::warn!("Unknown Team: {:?}", team);
+        }
+    }
+
+    // TODO
+    // Sort this
+    let mut output = demos.into_values().collect::<Vec<_>>();
+
+    Ok(axum::response::Json(output))
 }
 
 #[tracing::instrument(skip(state, session, form))]
@@ -82,7 +100,10 @@ async fn upload(
         Some(c) => c,
         None => {
             tracing::error!("Getting File content from request");
-            return Err((axum::http::StatusCode::BAD_REQUEST, "Failed to get file-content from upload"));
+            return Err((
+                axum::http::StatusCode::BAD_REQUEST,
+                "Failed to get file-content from upload",
+            ));
         }
     };
 
@@ -90,7 +111,7 @@ async fn upload(
     let demo_id = raw_demo_id.to_string();
 
     tracing::debug!(?demo_id, "Upload Size: {:?}", file_content.len());
-    
+
     let user_folder = std::path::Path::new(&state.upload_folder).join(format!("{}/", steam_id));
     if !tokio::fs::try_exists(&user_folder).await.unwrap_or(false) {
         tokio::fs::create_dir_all(&user_folder).await.unwrap();
@@ -106,30 +127,36 @@ async fn upload(
 
     // Turn all of this into a single transaction
 
-    let db_trans_result = db_con.build_transaction().run(|c| {
-        Box::pin(async move {
-            let query =
-        diesel::dsl::insert_into(crate::schema::demos::dsl::demos).values(crate::models::NewDemo {
-            demo_id: demo_id.clone(),
-            steam_id: steam_id.to_string(),
-        });
-    query.execute(c).await?;
+    let db_trans_result = db_con
+        .build_transaction()
+        .run(|c| {
+            Box::pin(async move {
+                let query = diesel::dsl::insert_into(crate::schema::demos::dsl::demos).values(
+                    crate::models::NewDemo {
+                        demo_id: demo_id.clone(),
+                        steam_id: steam_id.to_string(),
+                    },
+                );
+                query.execute(c).await?;
 
-    let queue_query = diesel::dsl::insert_into(crate::schema::analysis_queue::dsl::analysis_queue)
-        .values(crate::models::AddAnalysisTask {
-            demo_id: demo_id.clone(),
-            steam_id: steam_id.to_string(),
-        });
-    queue_query.execute(c).await?;
+                let queue_query =
+                    diesel::dsl::insert_into(crate::schema::analysis_queue::dsl::analysis_queue)
+                        .values(crate::models::AddAnalysisTask {
+                            demo_id: demo_id.clone(),
+                            steam_id: steam_id.to_string(),
+                        });
+                queue_query.execute(c).await?;
 
-    let processing_query =
-        diesel::dsl::insert_into(crate::schema::processing_status::dsl::processing_status)
-            .values(crate::models::ProcessingStatus { demo_id, info: 0 });
-    processing_query.execute(c).await?;
+                let processing_query = diesel::dsl::insert_into(
+                    crate::schema::processing_status::dsl::processing_status,
+                )
+                .values(crate::models::ProcessingStatus { demo_id, info: 0 });
+                processing_query.execute(c).await?;
 
-            Ok::<(), diesel::result::Error>(())
+                Ok::<(), diesel::result::Error>(())
+            })
         })
-    }).await;
+        .await;
 
     if let Err(e) = db_trans_result {
         tracing::error!("Inserting data into db: {:?}", e);
@@ -267,12 +294,14 @@ async fn scoreboard(
 async fn heatmap(
     session: UserSession,
     Path(demo_id): Path<String>,
-) -> Result<axum::response::Json<Vec<common::demo_analysis::PlayerHeatmap>>, axum::http::StatusCode> {
+) -> Result<axum::response::Json<Vec<common::demo_analysis::PlayerHeatmap>>, axum::http::StatusCode>
+{
     use base64::prelude::Engine;
 
     let mut db_con = crate::db_connection().await;
 
-    let demo_info_query = crate::schema::demo_info::dsl::demo_info.filter(crate::schema::demo_info::dsl::demo_id.eq(demo_id.clone()));
+    let demo_info_query = crate::schema::demo_info::dsl::demo_info
+        .filter(crate::schema::demo_info::dsl::demo_id.eq(demo_id.clone()));
     let demo_info: crate::models::DemoInfo = match demo_info_query.first(&mut db_con).await {
         Ok(i) => i,
         Err(e) => {
@@ -282,18 +311,26 @@ async fn heatmap(
     };
 
     let query = crate::schema::demo_players::dsl::demo_players
-        .inner_join(crate::schema::demo_heatmaps::dsl::demo_heatmaps.on(
-            crate::schema::demo_players::dsl::steam_id.eq(crate::schema::demo_heatmaps::dsl::steam_id)
-                .and(crate::schema::demo_players::dsl::demo_id.eq(crate::schema::demo_heatmaps::dsl::demo_id))
-        )).filter(crate::schema::demo_players::dsl::demo_id.eq(demo_id));
+        .inner_join(
+            crate::schema::demo_heatmaps::dsl::demo_heatmaps.on(
+                crate::schema::demo_players::dsl::steam_id
+                    .eq(crate::schema::demo_heatmaps::dsl::steam_id)
+                    .and(
+                        crate::schema::demo_players::dsl::demo_id
+                            .eq(crate::schema::demo_heatmaps::dsl::demo_id),
+                    ),
+            ),
+        )
+        .filter(crate::schema::demo_players::dsl::demo_id.eq(demo_id));
 
-    let result: Vec<(crate::models::DemoPlayer, crate::models::DemoPlayerHeatmap)> = match query.load(&mut db_con).await {
-        Ok(d) => d,
-        Err(e) => {
-            tracing::error!("Querying DB: {:?}", e);
-            return Err(axum::http::StatusCode::INTERNAL_SERVER_ERROR);
-        }
-    };
+    let result: Vec<(crate::models::DemoPlayer, crate::models::DemoPlayerHeatmap)> =
+        match query.load(&mut db_con).await {
+            Ok(d) => d,
+            Err(e) => {
+                tracing::error!("Querying DB: {:?}", e);
+                return Err(axum::http::StatusCode::INTERNAL_SERVER_ERROR);
+            }
+        };
 
     let demo_map = &demo_info.map;
     let minimap_coords = match MINIMAP_COORDINATES.get(demo_map) {
@@ -304,21 +341,30 @@ async fn heatmap(
         }
     };
 
-    let data: Vec<common::demo_analysis::PlayerHeatmap> = result.into_iter().map(|(player, heatmap)| {
-        let team = heatmap.team.clone();
-        let mut heatmap: analysis::heatmap::HeatMap = serde_json::from_str(&heatmap.data).unwrap();
-        heatmap.fit(minimap_coords.x_coord(0.0)..minimap_coords.x_coord(1024.0), minimap_coords.y_coord(1024.0)..minimap_coords.y_coord(0.0));
-        let h_image = heatmap.as_image();
+    let data: Vec<common::demo_analysis::PlayerHeatmap> = result
+        .into_iter()
+        .map(|(player, heatmap)| {
+            let team = heatmap.team.clone();
+            let mut heatmap: analysis::heatmap::HeatMap =
+                serde_json::from_str(&heatmap.data).unwrap();
+            heatmap.fit(
+                minimap_coords.x_coord(0.0)..minimap_coords.x_coord(1024.0),
+                minimap_coords.y_coord(1024.0)..minimap_coords.y_coord(0.0),
+            );
+            let h_image = heatmap.as_image();
 
-        let mut buffer = std::io::Cursor::new(Vec::new());
-        h_image.write_to(&mut buffer, image::ImageFormat::Png).unwrap();
+            let mut buffer = std::io::Cursor::new(Vec::new());
+            h_image
+                .write_to(&mut buffer, image::ImageFormat::Png)
+                .unwrap();
 
-        common::demo_analysis::PlayerHeatmap {
-            name: player.name,
-            team,
-            png_data: base64::prelude::BASE64_STANDARD.encode(buffer.into_inner()),
-        }
-    }).collect();
+            common::demo_analysis::PlayerHeatmap {
+                name: player.name,
+                team,
+                png_data: base64::prelude::BASE64_STANDARD.encode(buffer.into_inner()),
+            }
+        })
+        .collect();
 
     Ok(axum::Json(data))
 }
@@ -328,23 +374,38 @@ async fn perround(
     session: UserSession,
     Path(demo_id): Path<String>,
 ) -> Result<axum::response::Json<Vec<common::demo_analysis::DemoRound>>, axum::http::StatusCode> {
-    let rounds_query = crate::schema::demo_round::dsl::demo_round.filter(crate::schema::demo_round::dsl::demo_id.eq(demo_id.clone()));
-    let round_players_query = crate::schema::demo_players::dsl::demo_players.filter(crate::schema::demo_players::dsl::demo_id.eq(demo_id));
+    let rounds_query = crate::schema::demo_round::dsl::demo_round
+        .filter(crate::schema::demo_round::dsl::demo_id.eq(demo_id.clone()));
+    let round_players_query = crate::schema::demo_players::dsl::demo_players
+        .filter(crate::schema::demo_players::dsl::demo_id.eq(demo_id));
 
     let mut db_con = crate::db_connection().await;
-    
+
     let raw_rounds: Vec<crate::models::DemoRound> = rounds_query.load(&mut db_con).await.unwrap();
-    let players: Vec<crate::models::DemoPlayer> = round_players_query.load(&mut db_con).await.unwrap();
+    let players: Vec<crate::models::DemoPlayer> =
+        round_players_query.load(&mut db_con).await.unwrap();
 
     let mut result = Vec::with_capacity(raw_rounds.len());
     for raw_round in raw_rounds.into_iter() {
         let reason = match serde_json::from_str(&raw_round.win_reason) {
-            Ok(analysis::perround::WinReason::StillInProgress) => common::demo_analysis::RoundWinReason::StillInProgress,
-            Ok(analysis::perround::WinReason::TKilled) => common::demo_analysis::RoundWinReason::TKilled,
-            Ok(analysis::perround::WinReason::CTKilled) => common::demo_analysis::RoundWinReason::CTKilled,
-            Ok(analysis::perround::WinReason::BombDefused) => common::demo_analysis::RoundWinReason::BombDefused,
-            Ok(analysis::perround::WinReason::BombExploded) => common::demo_analysis::RoundWinReason::BombExploded,
-            Ok(analysis::perround::WinReason::TimeRanOut) => common::demo_analysis::RoundWinReason::TimeRanOut,
+            Ok(analysis::perround::WinReason::StillInProgress) => {
+                common::demo_analysis::RoundWinReason::StillInProgress
+            }
+            Ok(analysis::perround::WinReason::TKilled) => {
+                common::demo_analysis::RoundWinReason::TKilled
+            }
+            Ok(analysis::perround::WinReason::CTKilled) => {
+                common::demo_analysis::RoundWinReason::CTKilled
+            }
+            Ok(analysis::perround::WinReason::BombDefused) => {
+                common::demo_analysis::RoundWinReason::BombDefused
+            }
+            Ok(analysis::perround::WinReason::BombExploded) => {
+                common::demo_analysis::RoundWinReason::BombExploded
+            }
+            Ok(analysis::perround::WinReason::TimeRanOut) => {
+                common::demo_analysis::RoundWinReason::TimeRanOut
+            }
             Ok(other) => {
                 tracing::error!("Unknown Mapping {:?}", other);
                 return Err(axum::http::StatusCode::INTERNAL_SERVER_ERROR);
@@ -355,27 +416,38 @@ async fn perround(
             }
         };
 
-        let parsed_events: Vec<analysis::perround::RoundEvent> = serde_json::from_value(raw_round.events).unwrap();
-        let events: Vec<_> = parsed_events.into_iter().map(|event| {
-            match event {
-                analysis::perround::RoundEvent::BombPlanted => common::demo_analysis::RoundEvent::BombPlanted,
-                analysis::perround::RoundEvent::BombDefused => common::demo_analysis::RoundEvent::BombDefused,
+        let parsed_events: Vec<analysis::perround::RoundEvent> =
+            serde_json::from_value(raw_round.events).unwrap();
+        let events: Vec<_> = parsed_events
+            .into_iter()
+            .map(|event| match event {
+                analysis::perround::RoundEvent::BombPlanted => {
+                    common::demo_analysis::RoundEvent::BombPlanted
+                }
+                analysis::perround::RoundEvent::BombDefused => {
+                    common::demo_analysis::RoundEvent::BombDefused
+                }
                 analysis::perround::RoundEvent::Kill { attacker, died } => {
-                    let attacker_name = players.iter().find(|p| p.steam_id == attacker.to_string()).map(|p| p.name.clone()).unwrap();
-                    let died_name = players.iter().find(|p| p.steam_id == died.to_string()).map(|p| p.name.clone()).unwrap();
+                    let attacker_name = players
+                        .iter()
+                        .find(|p| p.steam_id == attacker.to_string())
+                        .map(|p| p.name.clone())
+                        .unwrap();
+                    let died_name = players
+                        .iter()
+                        .find(|p| p.steam_id == died.to_string())
+                        .map(|p| p.name.clone())
+                        .unwrap();
 
                     common::demo_analysis::RoundEvent::Killed {
                         attacker: attacker_name,
                         died: died_name,
                     }
                 }
-            }
-        }).collect();
+            })
+            .collect();
 
-        result.push(common::demo_analysis::DemoRound {
-            reason,
-            events,
-        });
+        result.push(common::demo_analysis::DemoRound { reason, events });
     }
 
     Ok(axum::Json(result))

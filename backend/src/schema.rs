@@ -57,6 +57,15 @@ diesel::table! {
 }
 
 diesel::table! {
+    demo_teams (demo_id, team) {
+        demo_id -> Text,
+        team -> Int2,
+        end_score -> Int2,
+        start_name -> Text,
+    }
+}
+
+diesel::table! {
     demos (steam_id, demo_id) {
         steam_id -> Text,
         demo_id -> Text,
@@ -80,13 +89,6 @@ diesel::table! {
 }
 
 diesel::table! {
-    user_demos (steam_id, demo_id) {
-        steam_id -> Text,
-        demo_id -> Text,
-    }
-}
-
-diesel::table! {
     users (steamid) {
         steamid -> Text,
         name -> Text,
@@ -100,9 +102,9 @@ diesel::allow_tables_to_appear_in_same_query!(
     demo_player_stats,
     demo_players,
     demo_round,
+    demo_teams,
     demos,
     processing_status,
     sessions,
-    user_demos,
     users,
 );
