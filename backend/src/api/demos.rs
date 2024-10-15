@@ -55,17 +55,22 @@ async fn list(
             crate::models::DemoTeam::as_select(),
         ))
         .filter(crate::schema::demos::dsl::steam_id.eq(steam_id.to_string()));
-    let results: Vec<(crate::models::Demo, crate::models::DemoInfo, crate::models::DemoTeam)> =
-        query.load(&mut crate::db_connection().await).await.unwrap();
-    
+    let results: Vec<(
+        crate::models::Demo,
+        crate::models::DemoInfo,
+        crate::models::DemoTeam,
+    )> = query.load(&mut crate::db_connection().await).await.unwrap();
+
     let mut demos = std::collections::HashMap::new();
     for (demo, info, team) in results.into_iter() {
-        let entry = demos.entry(demo.demo_id.clone()).or_insert(common::BaseDemoInfo {
-            id: demo.demo_id,
-            map: info.map,
-            team2_score: 0,
-            team3_score: 0,
-        });
+        let entry = demos
+            .entry(demo.demo_id.clone())
+            .or_insert(common::BaseDemoInfo {
+                id: demo.demo_id,
+                map: info.map,
+                team2_score: 0,
+                team3_score: 0,
+            });
 
         if team.team == 2 {
             entry.team2_score = team.end_score;
@@ -278,7 +283,7 @@ async fn scoreboard(
     }
 
     Ok(axum::Json(common::demo_analysis::ScoreBoard {
-        teams: teams.into_iter().collect::<Vec<_>>()
+        teams: teams.into_iter().collect::<Vec<_>>(),
     }))
 }
 
@@ -445,12 +450,13 @@ async fn perround(
         result.push(common::demo_analysis::DemoRound { reason, events });
     }
 
-    let teams = raw_teams.into_iter().map(|dteam| {
-        common::demo_analysis::PerRoundTeam {
+    let teams = raw_teams
+        .into_iter()
+        .map(|dteam| common::demo_analysis::PerRoundTeam {
             name: dteam.start_name,
             number: dteam.team as u32,
-        }
-    }).collect();
+        })
+        .collect();
 
     Ok(axum::Json(common::demo_analysis::PerRoundResult {
         rounds: result,

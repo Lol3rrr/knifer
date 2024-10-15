@@ -42,7 +42,8 @@ pub fn parse(buf: &[u8]) -> Result<EndOfGame, ()> {
     let header = &output.header;
 
     let mut player_stats = std::collections::HashMap::<_, PlayerStats>::new();
-    let mut pawn_to_player = std::collections::HashMap::<csdemo::structured::pawnid::PawnID, csdemo::UserId>::new();
+    let mut pawn_to_player =
+        std::collections::HashMap::<csdemo::structured::pawnid::PawnID, csdemo::UserId>::new();
 
     let mut track = false;
     let mut player_life = std::collections::HashMap::<_, u8>::new();
@@ -62,7 +63,17 @@ pub fn parse(buf: &[u8]) -> Result<EndOfGame, ()> {
 
                         player_life.insert(userid.clone(), 100);
 
-                        if let Some(pawn) = pspawn.userid_pawn.as_ref().map(|p| match p { csdemo::RawValue::I32(v) => Some(csdemo::structured::pawnid::PawnID::from(*v)), _ => None }).flatten() {
+                        if let Some(pawn) = pspawn
+                            .userid_pawn
+                            .as_ref()
+                            .map(|p| match p {
+                                csdemo::RawValue::I32(v) => {
+                                    Some(csdemo::structured::pawnid::PawnID::from(*v))
+                                }
+                                _ => None,
+                            })
+                            .flatten()
+                        {
                             pawn_to_player.insert(pawn, userid);
                         }
                     }
@@ -101,7 +112,10 @@ pub fn parse(buf: &[u8]) -> Result<EndOfGame, ()> {
             };
 
             let pawns = team.player_pawns();
-            let player_ids = pawns.into_iter().filter_map(|pawn| pawn_to_player.get(&pawn)).collect::<Vec<_>>();
+            let player_ids = pawns
+                .into_iter()
+                .filter_map(|pawn| pawn_to_player.get(&pawn))
+                .collect::<Vec<_>>();
             if player_ids.is_empty() {
                 if let Some(team_number) = entity_to_team.get(&team.entity_id()) {
                     if let Some(score) = team.score() {
@@ -114,15 +128,20 @@ pub fn parse(buf: &[u8]) -> Result<EndOfGame, ()> {
                 continue;
             }
 
-            let team_number = player_ids.iter().filter_map(|p| output.player_info.get(*p).map(|p| p.team)).next().unwrap();
+            let team_number = player_ids
+                .iter()
+                .filter_map(|p| output.player_info.get(*p).map(|p| p.team))
+                .next()
+                .unwrap();
 
             entity_to_team.insert(team.entity_id(), team_number);
-            
-            let team_entry = teams.entry(team_number).or_insert_with(|| {
-                TeamInfo {
-                    end_score: 0,
-                    start_side: team.team_name().map(|t| t.to_owned()).unwrap_or(String::new()),
-                }
+
+            let team_entry = teams.entry(team_number).or_insert_with(|| TeamInfo {
+                end_score: 0,
+                start_side: team
+                    .team_name()
+                    .map(|t| t.to_owned())
+                    .unwrap_or(String::new()),
             });
             if let Some(score) = team.score() {
                 team_entry.end_score = score as usize;

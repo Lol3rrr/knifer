@@ -66,12 +66,19 @@ impl Analysis for BaseAnalysis {
 
         let base_result = BaseInfo {
             map: result.map,
-            teams: result.teams.into_iter().map(|(numb, team)| {
-                (numb, BaseTeamInfo {
-                    end_score: team.end_score,
-                    start_side: team.start_side,
+            teams: result
+                .teams
+                .into_iter()
+                .map(|(numb, team)| {
+                    (
+                        numb,
+                        BaseTeamInfo {
+                            end_score: team.end_score,
+                            start_side: team.start_side,
+                        },
+                    )
                 })
-            }).collect(),
+                .collect(),
             players: result
                 .players
                 .into_iter()
@@ -119,14 +126,16 @@ impl Analysis for BaseAnalysis {
             })
             .unzip();
 
-        let teams = base_result.teams.into_iter().map(|(numb, team)| {
-            crate::models::DemoTeam {
+        let teams = base_result
+            .teams
+            .into_iter()
+            .map(|(numb, team)| crate::models::DemoTeam {
                 demo_id: input.demoid.clone(),
                 team: numb as i16,
                 end_score: team.end_score as i16,
                 start_name: team.start_side,
-            }
-        }).collect::<Vec<_>>();
+            })
+            .collect::<Vec<_>>();
 
         let demo_info = crate::models::DemoInfo {
             demo_id: input.demoid.clone(),
@@ -179,7 +188,8 @@ impl Analysis for BaseAnalysis {
                     crate::schema::demo_teams::dsl::demo_id,
                     crate::schema::demo_teams::dsl::team,
                 ))
-            .do_update().set((
+                .do_update()
+                .set((
                     crate::schema::demo_teams::dsl::start_name.eq(diesel::upsert::excluded(
                         crate::schema::demo_teams::dsl::start_name,
                     )),
