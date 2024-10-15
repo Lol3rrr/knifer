@@ -20,14 +20,24 @@ pub fn scoreboard() -> impl leptos::IntoView {
 
     let (ordering, set_ordering) = create_signal::<orderings::Ordering>(orderings::DAMAGE);
 
+    let scoreboards = move || {
+        scoreboard_resource
+            .get()
+            .into_iter()
+            .flat_map(|v| v.teams.into_iter())
+            .map(|(team, players)| view! {
+                <TeamScoreboard value=players team_name=format!("Team {}", team) />
+            })
+            .collect::<Vec<_>>()
+    };
+
     view! {
         <h2>Scoreboard</h2>
 
         <Suspense
             fallback=move || view! { <p>Loading Scoreboard data</p> }
         >
-            <TeamScoreboard info=scoreboard_resource team_name="Team 1".to_string() part=|s| s.team1 />
-            <TeamScoreboard info=scoreboard_resource team_name="Team 2".to_string() part=|s| s.team2 />
+            { scoreboards }
         </Suspense>
     }
 }
@@ -79,7 +89,7 @@ mod orderings {
 }
 
 #[leptos::component]
-fn team_scoreboard(info: Resource<leptos_router::ParamsMap, common::demo_analysis::ScoreBoard>, team_name: String, part: fn(common::demo_analysis::ScoreBoard) -> Vec<common::demo_analysis::ScoreBoardPlayer>) -> impl IntoView {
+fn team_scoreboard(value: Vec<common::demo_analysis::ScoreBoardPlayer>, team_name: String) -> impl IntoView {
     let (ordering, set_ordering) = create_signal::<orderings::Ordering>(orderings::DAMAGE);
 
     let style = stylers::style! {
@@ -119,8 +129,7 @@ fn team_scoreboard(info: Resource<leptos_router::ParamsMap, common::demo_analysi
                 </tr>
         {
             move || {
-                let value = info.get().map(|v| part(v));
-                let mut players: Vec<_> = value.into_iter().flat_map(|v| v).collect();
+                let mut players: Vec<_> = value.clone().into_iter().collect();
                 let sorting = ordering.get();
                 players.sort_unstable_by(|p1, p2| (sorting.sort_fn)(p1, p2));
 

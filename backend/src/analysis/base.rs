@@ -1,5 +1,35 @@
 use super::*;
 
+#[derive(Debug)]
+struct BaseInfo {
+    pub map: String,
+    pub players: Vec<(BasePlayerInfo, BasePlayerStats)>,
+    pub teams: std::collections::HashMap<i32, BaseTeamInfo>,
+}
+
+#[derive(Debug)]
+struct BaseTeamInfo {
+    pub start_side: String,
+    pub end_score: usize,
+}
+
+#[derive(Debug)]
+struct BasePlayerInfo {
+    pub name: String,
+    pub steam_id: String,
+    pub team: i32,
+    pub color: i32,
+    pub ingame_id: i32,
+}
+
+#[derive(Debug)]
+struct BasePlayerStats {
+    pub kills: usize,
+    pub deaths: usize,
+    pub damage: usize,
+    pub assists: usize,
+}
+
 pub struct BaseAnalysis {}
 
 impl BaseAnalysis {
@@ -36,6 +66,12 @@ impl Analysis for BaseAnalysis {
 
         let base_result = BaseInfo {
             map: result.map,
+            teams: result.teams.into_iter().map(|(numb, team)| {
+                (numb, BaseTeamInfo {
+                    end_score: team.end_score,
+                    start_side: team.start_side,
+                })
+            }).collect(),
             players: result
                 .players
                 .into_iter()
@@ -57,12 +93,6 @@ impl Analysis for BaseAnalysis {
                     )
                 })
                 .collect(),
-            teams: result.teams.into_iter().map(|(numb, val)| {
-                (numb, BaseTeamInfo {
-                    name: val.name,
-                    score: val.score,
-                })
-            }).collect(),
         };
 
         let (player_info, player_stats): (Vec<_>, Vec<_>) = base_result
@@ -89,19 +119,19 @@ impl Analysis for BaseAnalysis {
             })
             .unzip();
 
+        let teams = base_result.teams.into_iter().map(|(numb, team)| {
+            crate::models::DemoTeam {
+                demo_id: input.demoid.clone(),
+                team: numb as i16,
+                end_score: team.end_score as i16,
+                start_name: team.start_side,
+            }
+        }).collect::<Vec<_>>();
+
         let demo_info = crate::models::DemoInfo {
             demo_id: input.demoid.clone(),
             map: base_result.map,
         };
-
-        let demo_teams: Vec<crate::models::DemoTeam> = base_result.teams.into_iter().map(|(numb, info)| {
-            crate::models::DemoTeam {
-                demo_id: input.demoid.clone(),
-                team: numb as i16,
-                end_score: info.score as i16,
-                start_name: info.name,
-            }
-        }).collect();
 
         Ok(Box::new(move |connection| {
             let store_demo_info_query =
@@ -143,19 +173,26 @@ impl Analysis for BaseAnalysis {
                         )),
                     ));
 
-            let store_demo_teams = diesel::dsl::insert_into(crate::schema::demo_teams::dsl::demo_teams)
-            .values(demo_teams).on_conflict((crate::schema::demo_teams::dsl::demo_id, crate::schema::demo_teams::dsl::team))
-            .do_update()
-            .set((
-                    crate::schema::demo_teams::dsl::start_name.eq(diesel::upsert::excluded(crate::schema::demo_teams::dsl::start_name)),
-                    crate::schema::demo_teams::dsl::end_score.eq(diesel::upsert::excluded(crate::schema::demo_teams::dsl::end_score)),
+            let store_teams = diesel::dsl::insert_into(crate::schema::demo_teams::dsl::demo_teams)
+                .values(teams)
+                .on_conflict((
+                    crate::schema::demo_teams::dsl::demo_id,
+                    crate::schema::demo_teams::dsl::team,
+                ))
+            .do_update().set((
+                    crate::schema::demo_teams::dsl::start_name.eq(diesel::upsert::excluded(
+                        crate::schema::demo_teams::dsl::start_name,
+                    )),
+                    crate::schema::demo_teams::dsl::end_score.eq(diesel::upsert::excluded(
+                        crate::schema::demo_teams::dsl::end_score,
+                    )),
                 ));
 
             Box::pin(async move {
                 store_demo_info_query.execute(connection).await?;
                 store_demo_players_query.execute(connection).await?;
                 store_demo_player_stats_query.execute(connection).await?;
-                store_demo_teams.execute(connection).await?;
+                store_teams.execute(connection).await?;
 
                 Ok(())
             })

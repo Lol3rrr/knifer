@@ -102,33 +102,3 @@ pub struct AnalysisInput {
     pub demoid: String,
     pub path: PathBuf,
 }
-
-#[derive(Debug)]
-pub struct BaseInfo {
-    pub map: String,
-    pub players: Vec<(BasePlayerInfo, BasePlayerStats)>,
-    pub teams: Vec<(u32, BaseTeamInfo)>
-}
-
-#[derive(Debug)]
-pub struct BaseTeamInfo {
-    pub score: usize,
-    pub name: String,
-}
-
-#[derive(Debug)]
-pub struct BasePlayerInfo {
-    pub name: String,
-    pub steam_id: String,
-    pub team: i32,
-    pub color: i32,
-    pub ingame_id: i32,
-}
-
-#[derive(Debug)]
-pub struct BasePlayerStats {
-    pub kills: usize,
-    pub deaths: usize,
-    pub damage: usize,
-    pub assists: usize,
-}

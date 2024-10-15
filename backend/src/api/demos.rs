@@ -264,18 +264,11 @@ async fn scoreboard(
         return Err(axum::http::StatusCode::INTERNAL_SERVER_ERROR);
     }
 
-    let team1_number: i16 = response.last().map(|(p, _)| p.team).unwrap();
-
-    let mut team1 = Vec::new();
-    let mut team2 = Vec::new();
+    let mut teams = std::collections::BTreeMap::new();
     for (player, stats) in response {
-        let team_vec = if player.team == team1_number {
-            &mut team1
-        } else {
-            &mut team2
-        };
+        let team = teams.entry(player.team as u32).or_insert(Vec::new());
 
-        team_vec.push(common::demo_analysis::ScoreBoardPlayer {
+        team.push(common::demo_analysis::ScoreBoardPlayer {
             name: player.name,
             kills: stats.kills as usize,
             deaths: stats.deaths as usize,
@@ -285,8 +278,7 @@ async fn scoreboard(
     }
 
     Ok(axum::Json(common::demo_analysis::ScoreBoard {
-        team1,
-        team2,
+        teams: teams.into_iter().collect::<Vec<_>>()
     }))
 }
 
@@ -373,17 +365,20 @@ async fn heatmap(
 async fn perround(
     session: UserSession,
     Path(demo_id): Path<String>,
-) -> Result<axum::response::Json<Vec<common::demo_analysis::DemoRound>>, axum::http::StatusCode> {
+) -> Result<axum::response::Json<common::demo_analysis::PerRoundResult>, axum::http::StatusCode> {
     let rounds_query = crate::schema::demo_round::dsl::demo_round
         .filter(crate::schema::demo_round::dsl::demo_id.eq(demo_id.clone()));
     let round_players_query = crate::schema::demo_players::dsl::demo_players
-        .filter(crate::schema::demo_players::dsl::demo_id.eq(demo_id));
+        .filter(crate::schema::demo_players::dsl::demo_id.eq(demo_id.clone()));
+    let demo_teams = crate::schema::demo_teams::dsl::demo_teams
+        .filter(crate::schema::demo_teams::dsl::demo_id.eq(demo_id));
 
     let mut db_con = crate::db_connection().await;
 
     let raw_rounds: Vec<crate::models::DemoRound> = rounds_query.load(&mut db_con).await.unwrap();
     let players: Vec<crate::models::DemoPlayer> =
         round_players_query.load(&mut db_con).await.unwrap();
+    let raw_teams: Vec<crate::models::DemoTeam> = demo_teams.load(&mut db_con).await.unwrap();
 
     let mut result = Vec::with_capacity(raw_rounds.len());
     for raw_round in raw_rounds.into_iter() {
@@ -450,7 +445,17 @@ async fn perround(
         result.push(common::demo_analysis::DemoRound { reason, events });
     }
 
-    Ok(axum::Json(result))
+    let teams = raw_teams.into_iter().map(|dteam| {
+        common::demo_analysis::PerRoundTeam {
+            name: dteam.start_name,
+            number: dteam.team as u32,
+        }
+    }).collect();
+
+    Ok(axum::Json(common::demo_analysis::PerRoundResult {
+        rounds: result,
+        teams,
+    }))
 }
 
 // The corresponding values for each map can be found using the Source2 Viewer and opening the

@@ -1,16 +1,14 @@
-use std::collections::HashMap;
-
 #[derive(Debug, PartialEq)]
 pub struct EndOfGame {
     pub map: String,
     pub players: Vec<(PlayerInfo, PlayerStats)>,
-    pub teams: HashMap<u32, TeamInfo>,
+    pub teams: std::collections::HashMap<i32, TeamInfo>,
 }
 
 #[derive(Debug, PartialEq)]
 pub struct TeamInfo {
-    pub name: String,
-    pub score: usize,
+    pub end_score: usize,
+    pub start_side: String,
 }
 
 #[derive(Debug, PartialEq)]
@@ -44,6 +42,7 @@ pub fn parse(buf: &[u8]) -> Result<EndOfGame, ()> {
     let header = &output.header;
 
     let mut player_stats = std::collections::HashMap::<_, PlayerStats>::new();
+    let mut pawn_to_player = std::collections::HashMap::<csdemo::structured::pawnid::PawnID, csdemo::UserId>::new();
 
     let mut track = false;
     let mut player_life = std::collections::HashMap::<_, u8>::new();
@@ -59,7 +58,13 @@ pub fn parse(buf: &[u8]) -> Result<EndOfGame, ()> {
                         track = true;
                     }
                     csdemo::game_event::GameEvent::PlayerSpawn(pspawn) => {
-                        player_life.insert(pspawn.userid.unwrap(), 100);
+                        let userid = pspawn.userid.unwrap();
+
+                        player_life.insert(userid.clone(), 100);
+
+                        if let Some(pawn) = pspawn.userid_pawn.as_ref().map(|p| match p { csdemo::RawValue::I32(v) => Some(csdemo::structured::pawnid::PawnID::from(*v)), _ => None }).flatten() {
+                            pawn_to_player.insert(pawn, userid);
+                        }
                     }
                     csdemo::game_event::GameEvent::WinPanelMatch(_) => {
                         track = false;
@@ -85,55 +90,42 @@ pub fn parse(buf: &[u8]) -> Result<EndOfGame, ()> {
         };
     }
 
-    let mut teams = HashMap::new();
-    let mut entity_to_team = HashMap::new();
-    let mut entity_to_name = HashMap::<_, String>::new();
+    let mut teams = std::collections::HashMap::<i32, TeamInfo>::new();
+
+    let mut entity_to_team = std::collections::HashMap::new();
     for tick_state in output.entity_states.ticks {
         for state in tick_state.states {
-            if state.class.as_ref() != "CCSTeam" {
+            let team = match csdemo::structured::ccsteam::CCSTeam::try_from(&state) {
+                Ok(t) => t,
+                Err(_) => continue,
+            };
+
+            let pawns = team.player_pawns();
+            let player_ids = pawns.into_iter().filter_map(|pawn| pawn_to_player.get(&pawn)).collect::<Vec<_>>();
+            if player_ids.is_empty() {
+                if let Some(team_number) = entity_to_team.get(&team.entity_id()) {
+                    if let Some(score) = team.score() {
+                        if let Some(team_entry) = teams.get_mut(team_number) {
+                            team_entry.end_score = score as usize;
+                        }
+                    }
+                }
+
                 continue;
             }
 
-            let team = match state
-                .get_prop("CCSTeam.m_iTeamNum")
-                .map(|p| p.value.as_u32())
-                .flatten()
-            {
-                Some(team) => {
-                    entity_to_team.insert(state.id, team.clone());
-                    team
+            let team_number = player_ids.iter().filter_map(|p| output.player_info.get(*p).map(|p| p.team)).next().unwrap();
+
+            entity_to_team.insert(team.entity_id(), team_number);
+            
+            let team_entry = teams.entry(team_number).or_insert_with(|| {
+                TeamInfo {
+                    end_score: 0,
+                    start_side: team.team_name().map(|t| t.to_owned()).unwrap_or(String::new()),
                 }
-                None => match entity_to_team.get(&state.id) {
-                    Some(t) => t.clone(),
-                    None => continue,
-                },
-            };
-
-            let name = match entity_to_name.get(&state.id) {
-                Some(n) => n.to_owned(),
-                None => match state
-                    .get_prop("CCSTeam.m_szTeamname")
-                    .map(|p| match &p.value {
-                        csdemo::parser::Variant::String(v) => Some(v.to_owned()),
-                        _ => None,
-                    })
-                    .flatten()
-                {
-                    Some(n) => {
-                        entity_to_name.insert(state.id, n.clone());
-                        n
-                    }
-                    None => continue,
-                },
-            };
-
-            if let Some(score) = state
-                .get_prop("CCSTeam.m_iScore")
-                .map(|p| p.value.as_i32())
-                .flatten()
-                .map(|v| v as usize)
-            {
-                teams.insert(team, TeamInfo { name, score });
+            });
+            if let Some(score) = team.score() {
+                team_entry.end_score = score as usize;
             }
         }
     }

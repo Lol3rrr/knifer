@@ -1,26 +1,14 @@
 use leptos::*;
 
-fn to_roman(mut number: u32) -> char {
-    if number < 12 {
-        char::from_u32(8544 + number).unwrap()
-    } else if number < 24 {
-        char::from_u32(8544 + (number - 12)).unwrap()
-    } else if number < 27 {
-        char::from_u32(8544 + (number - 24)).unwrap()
-    } else {
-        char::from_u32(8544 + (number - 27)).unwrap()
-    }
-}
-
 fn to_coloumn(idx: usize) -> usize {
     if idx < 12 {
-        1 + idx
+        2 + idx
     } else if idx < 24 {
-        1 + idx + 1
+        2 + idx + 1
     } else if idx < 27 {
-        1 + idx + 2
+        2 + idx + 2
     } else {
-        1 + idx + 3
+        2 + idx + 3
     }
 }
 
@@ -35,18 +23,18 @@ pub fn per_round() -> impl leptos::IntoView {
                     .send()
                     .await
                     .unwrap();
-            res.json::<Vec<common::demo_analysis::DemoRound>>()
+            res.json::<common::demo_analysis::PerRoundResult>()
                 .await
                 .unwrap()
         });
-
+ 
     let style = stylers::style! {
         "PerRound",
         .round_overview {
             display: inline-grid;
             
             width: 90vw;
-            grid-template-columns: repeat(12, 1fr) 5px repeat(12, 1fr) 5px repeat(3, 1fr) 5px repeat(3, 1fr);
+            grid-template-columns: auto repeat(12, 1fr) 5px repeat(12, 1fr) 5px repeat(3, 1fr) 5px repeat(3, 1fr);
             grid-template-rows: repeat(3, auto);
         }
 
@@ -84,7 +72,7 @@ pub fn per_round() -> impl leptos::IntoView {
 
     let events_list = move || {
         let round_index = round();
-        let current_round = perround_resource.get().map(|rs| rs.get(round_index).cloned()).flatten();
+        let current_round = perround_resource.get().map(|rs| rs.rounds.get(round_index).cloned()).flatten();
 
         match current_round {
             Some(round) => {
@@ -106,7 +94,7 @@ pub fn per_round() -> impl leptos::IntoView {
                     set_round.set(r);
                 };
 
-                let round = perround_resource.get().map(|rs| rs.get(r).cloned()).flatten();
+                let round = perround_resource.get().map(|rs| rs.rounds.get(r).cloned()).flatten();
                 let reason = round.map(|r| r.reason);
 
                 let (ct_won, t_won) = match &reason {
@@ -159,11 +147,27 @@ pub fn per_round() -> impl leptos::IntoView {
             }).collect::<Vec<_>>()
     };
 
+    let team_names = move || {
+        let perround_teams = match perround_resource.get().map(|p| p.teams) {
+            Some(t) => t,
+            None => return view! {}.into_view(),
+        };
+
+        let upper = perround_teams.iter().find(|t| t.name == "CT").map(|t| t.number).unwrap_or(0);
+        let lower = perround_teams.iter().find(|t| t.name == "TERRORIST").map(|t| t.number).unwrap_or(0);
+
+        view! {
+            <span style="grid-column: 1; grid-row: 1">Team { upper }</span>
+            <span style="grid-column: 1; grid-row: 3">Team { lower }</span>
+        }.into_view()
+    };
+
     view! {
         class=style,
         <h3>Per Round</h3>
 
         <div class="round_overview">
+            { team_names }
             { round_overview }
         </div>
 

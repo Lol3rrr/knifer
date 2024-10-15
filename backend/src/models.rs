@@ -43,6 +43,16 @@ pub struct DemoInfo {
 }
 
 #[derive(Queryable, Selectable, Insertable, Debug)]
+#[diesel(table_name = crate::schema::demo_teams)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct DemoTeam {
+    pub demo_id: String,
+    pub team: i16,
+    pub end_score: i16,
+    pub start_name: String,
+}
+
+#[derive(Queryable, Selectable, Insertable, Debug)]
 #[diesel(table_name = crate::schema::demo_players)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct DemoPlayer {
@@ -63,16 +73,6 @@ pub struct DemoPlayerStats {
     pub deaths: i16,
     pub damage: i16,
     pub assists: i16,
-}
-
-#[derive(Queryable, Selectable, Insertable, Debug)]
-#[diesel(table_name = crate::schema::demo_teams)]
-#[diesel(check_for_backend(diesel::pg::Pg))]
-pub struct DemoTeam {
-    pub demo_id: String,
-    pub team: i16,
-    pub end_score: i16,
-    pub start_name: String,
 }
 
 #[derive(Queryable, Selectable, Insertable, Debug)]
