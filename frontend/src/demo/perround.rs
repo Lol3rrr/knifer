@@ -57,10 +57,10 @@ pub fn per_round() -> impl leptos::IntoView {
             margin: 0px;
         }
 
-        .won.ct_won {
+        .won.ct_won, .ct_player {
             background-color: #1111ff77;
         }
-        .won.t_won {
+        .won.t_won, .t_player {
             background-color: #dd111177;
         }
         .lose {
@@ -72,19 +72,37 @@ pub fn per_round() -> impl leptos::IntoView {
 
     let events_list = move || {
         let round_index = round();
-        let current_round = perround_resource.get().map(|rs| rs.rounds.get(round_index).cloned()).flatten();
+        let data = perround_resource.get();
+        let current_round = data.as_ref().map(|rs| rs.rounds.get(round_index).cloned()).flatten();
+        let teams = data.as_ref().map(|rs| rs.teams.clone());
 
-        match current_round {
-            Some(round) => {
+        match (current_round, teams) {
+            (Some(round), Some(teams)) => {
                 round.events.iter().map(|event| {
                     match event {
                         common::demo_analysis::RoundEvent::BombPlanted => view! { <li>Bomb has been planted</li> }.into_view(),
                         common::demo_analysis::RoundEvent::BombDefused => view! { <li>Bomb has been defused</li> }.into_view(),
-                        common::demo_analysis::RoundEvent::Killed { attacker, died } => view! { <li>{"'"}{ attacker }{"'"} killed {"'"}{ died }{"'"}</li> }.into_view(),
+                        common::demo_analysis::RoundEvent::Killed { attacker, died } => {
+                            let mut attacker_t = teams.iter().find(|t| t.players.contains(attacker)).map(|t| t.name == "TERRORIST").unwrap_or(false);
+                            let mut died_t = teams.iter().find(|t| t.players.contains(died)).map(|t| t.name == "TERRORIST").unwrap_or(false);
+
+                            if (12..27).contains(&round_index) {
+                                attacker_t = !attacker_t;
+                                died_t = !died_t;
+                            }
+
+                            view! {
+                                class=style,
+                                <li>{"'"}
+                                    <span class:t_player=move || attacker_t class:ct_player=move || !attacker_t>{ attacker }</span>{"'"} killed {"'"}
+                                    <span class:t_player=move || died_t class:ct_player=move || !died_t>{ died }</span>{"'"}
+                                </li>
+                            }.into_view()
+                        },
                     }
                 }).collect::<Vec<_>>().into_view()
             }
-            None => view! {}.into_view(),
+            _ => view! {}.into_view(),
         }
     };
 

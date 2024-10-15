@@ -29,6 +29,7 @@ pub struct PerRoundResult {
 pub struct PerRoundTeam {
     pub name: String,
     pub number: u32,
+    pub players: std::collections::HashSet<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
