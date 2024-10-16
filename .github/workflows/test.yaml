@@ -37,6 +37,8 @@ jobs:
         toolchain: nightly
         override: true
         components: rustfmt, clippy
+    - name: Install Protoc
+      uses: arduino/setup-protoc@v3
     - name: Run Clippy
       run: cargo clippy -p ${{ matrix.crate }}
     - name: Run formatting
