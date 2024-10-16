@@ -16,6 +16,8 @@ jobs:
       with:
         toolchain: nightly
         override: true
+    - name: Install Protoc
+      uses: arduino/setup-protoc@v3
     - name: Run Tests
       run: cargo test -p ${{ matrix.crate }}
 
