@@ -5,6 +5,7 @@ A self-hosted demo analysis tool
 ### Environment Variables
 - `DATABASE_URL`
 - `STEAM_API_KEY`
+- `BASE_URL`
 
 ### Needed external Software
 - `postgresql`

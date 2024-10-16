@@ -64,13 +64,15 @@ pub async fn run_api(
     let serve_dir = option_env!("FRONTEND_DIST_DIR").unwrap_or("../frontend/dist/");
     tracing::debug!("Serving static files from {:?}", serve_dir);
 
+    let steam_callback_base_url = std::env::var("BASE_URL").unwrap_or("http://localhost:3000".to_owned());
+    tracing::debug!("Base-URL: {:?}", steam_callback_base_url);
+
     let router = axum::Router::new()
         .nest(
             "/api/",
             crate::api::router(crate::api::RouterConfig {
                 steam_api_key: steam_api_key.into(),
-                steam_callback_base_url: "http://localhost:3000".into(),
-                // steam_callback_base_url: "http://192.168.0.156:3000".into(),
+                steam_callback_base_url,
                 steam_callback_path: "/api/steam/callback".into(),
                 upload_dir: upload_folder.clone(),
             }),
