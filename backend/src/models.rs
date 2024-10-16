@@ -23,7 +23,7 @@ pub struct NewDemo {
 pub struct Demo {
     pub steam_id: String,
     pub demo_id: String,
-    pub uploaded_at: diesel::data_types::PgTimestamp,
+    pub uploaded_at: chrono::naive::NaiveDateTime,
 }
 
 #[derive(Queryable, Selectable, Insertable, Debug)]

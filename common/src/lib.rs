@@ -2,6 +2,7 @@
 pub struct BaseDemoInfo {
     pub id: String,
     pub map: String,
+    pub uploaded_at: chrono::naive::NaiveDateTime,
     pub team2_score: i16,
     pub team3_score: i16,
 }

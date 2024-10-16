@@ -15,10 +15,46 @@ pub enum DemoUploadStatus {
 
 #[leptos::component]
 pub fn demo_list_entry(demo: common::BaseDemoInfo) -> impl leptos::IntoView {
+    let style = stylers::style! {
+        "DemoListEntry",
+        .entry {
+            display: inline-grid;
+
+            grid-template-columns: auto auto auto;
+
+            border: solid #030303aa 1px;
+            margin-top: 5px;
+            margin-bottom: 5px;
+        }
+
+        .score, .map {
+            padding-left: 5px;
+            padding-right: 5px;
+
+            margin-top: auto;
+            margin-bottom: auto;
+        }
+
+        .date {
+            display: inline-grid;
+
+            grid-template-columns: auto;
+            grid-template-rows: auto auto;
+        }
+    };
+
     view! {
+        class=style,
         <li>
             <A href=format!("demo/{}/scoreboard", demo.id)>
-                <span>{demo.map} - {demo.id} - {demo.team2_score}:{demo.team3_score}</span>
+                <div class="entry">
+                    <span class="score">{demo.team2_score}:{demo.team3_score}</span>
+                    <div class="date">
+                        <span>{demo.uploaded_at.format("%Y-%m-%d").to_string()}</span>
+                        <span>{demo.uploaded_at.format("%H-%M-%S").to_string()}</span>
+                    </div>
+                    <span class="map">{demo.map}</span>
+                </div>
             </A>
         </li>
     }

@@ -68,6 +68,7 @@ async fn list(
             .or_insert(common::BaseDemoInfo {
                 id: demo.demo_id,
                 map: info.map,
+                uploaded_at: demo.uploaded_at,
                 team2_score: 0,
                 team3_score: 0,
             });
@@ -81,9 +82,9 @@ async fn list(
         }
     }
 
-    // TODO
     // Sort this
     let mut output = demos.into_values().collect::<Vec<_>>();
+    output.sort_unstable_by_key(|d| d.uploaded_at);
 
     Ok(axum::response::Json(output))
 }
