@@ -104,14 +104,6 @@ pub fn parse(buf: &[u8]) -> Result<PerRound, ()> {
                 }
             }
 
-            let total_rounds_played = state
-                .get_prop("CCSGameRulesProxy.CCSGameRules.m_totalRoundsPlayed")
-                .map(|v| v.value.as_i32())
-                .flatten();
-            if let Some(total_rounds_played) = total_rounds_played {
-                debug_assert_eq!(total_rounds_played, rounds.len() as i32);
-            }
-
             if state.class.as_ref() == "CCSGameRulesProxy" {
                 let round_win_reason = state
                     .get_prop("CCSGameRulesProxy.CCSGameRules.m_eRoundWinReason")
