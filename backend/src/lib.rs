@@ -103,7 +103,8 @@ pub async fn run_analysis(upload_folder: impl Into<std::path::PathBuf>) {
             Ok(i) => i,
             Err(e) => {
                 tracing::error!("Polling for next Task: {:?}", e);
-                break;
+                tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+                continue;
             }
         };
 
@@ -135,7 +136,7 @@ pub async fn run_analysis(upload_folder: impl Into<std::path::PathBuf>) {
                 .set(crate::schema::processing_status::dsl::info.eq(1))
                 .filter(crate::schema::processing_status::dsl::demo_id.eq(demo_id));
 
-        db_con
+        let store_res = db_con
             .transaction::<'_, '_, '_, _, diesel::result::Error, _>(|conn| {
                 Box::pin(async move {
                     for store_fn in store_result_fns {
@@ -146,9 +147,14 @@ pub async fn run_analysis(upload_folder: impl Into<std::path::PathBuf>) {
                     Ok(())
                 })
             })
-            .await
-            .unwrap();
-
-        tracing::info!("Stored analysis results");
+            .await;
+        match store_res {
+            Ok(_) => {
+                tracing::info!("Stored analysis results");
+            }
+            Err(e) => {
+                tracing::error!("Failed to store results: {:?}", e);
+            }
+        };
     }
 }
