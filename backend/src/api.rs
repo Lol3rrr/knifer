@@ -169,3 +169,31 @@ pub fn router(config: RouterConfig) -> axum::Router {
         .nest("/demos/", demos::router(config.upload_dir))
         .nest("/user/", user::router())
 }
+
+// Save a `Stream` to a file
+async fn stream_to_file<S, E>(path: impl Into<std::path::PathBuf>, stream: S) -> Result<(), (axum::http::StatusCode, String)>
+where
+    S: futures::Stream<Item = Result<axum::body::Bytes, E>>,
+    E: Into<Box<dyn std::error::Error + Send + Sync + 'static>>,
+{
+    use futures::{Stream, TryStreamExt};
+    
+    let path: std::path::PathBuf = path.into();
+
+    async {
+        // Convert the stream into an `AsyncRead`.
+        let body_with_io_error = stream.map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err));
+        let body_reader = tokio_util::io::StreamReader::new(body_with_io_error);
+        futures::pin_mut!(body_reader);
+
+        // Create the file. `File` implements `AsyncWrite`.
+        let mut file = tokio::io::BufWriter::new(tokio::fs::File::create(path).await?);
+
+        // Copy the body into the file.
+        tokio::io::copy(&mut body_reader, &mut file).await?;
+
+        Ok::<_,std::io::Error>(())
+    }
+    .await
+    .map_err(|err| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))
+}

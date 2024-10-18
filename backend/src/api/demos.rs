@@ -93,7 +93,7 @@ async fn list(
 async fn upload(
     State(state): State<Arc<DemoState>>,
     session: crate::UserSession,
-    form: axum::extract::Multipart,
+    mut form: axum::extract::Multipart,
 ) -> Result<axum::response::Redirect, (axum::http::StatusCode, &'static str)> {
     let steam_id = session
         .data()
@@ -102,21 +102,26 @@ async fn upload(
 
     tracing::info!("Upload for Session: {:?}", steam_id);
 
-    let file_content = match crate::get_demo_from_upload("demo", form).await {
-        Some(c) => c,
-        None => {
-            tracing::error!("Getting File content from request");
-            return Err((
-                axum::http::StatusCode::BAD_REQUEST,
-                "Failed to get file-content from upload",
-            ));
+    let file_field = loop {
+        let field = match form.next_field().await {
+            Ok(Some(f)) => f,
+            Ok(None) => {
+                tracing::error!("");
+                return Err((axum::http::StatusCode::BAD_REQUEST, "Missing Data"));
+            }
+            Err(e) => {
+                tracing::error!("");
+                return Err((axum::http::StatusCode::BAD_REQUEST, ""));
+            }
+        };
+
+        if field.name().map(|n| n == "demo").unwrap_or(false) {
+            break field;
         }
     };
 
     let raw_demo_id = uuid::Uuid::now_v7();
     let demo_id = raw_demo_id.to_string();
-
-    tracing::debug!(?demo_id, "Upload Size: {:?}", file_content.len());
 
     let user_folder = std::path::Path::new(&state.upload_folder).join(format!("{}/", steam_id));
     if !tokio::fs::try_exists(&user_folder).await.unwrap_or(false) {
@@ -125,9 +130,7 @@ async fn upload(
 
     let demo_file_path = user_folder.join(format!("{}.dem", demo_id));
 
-    tokio::fs::write(&demo_file_path, file_content)
-        .await
-        .unwrap();
+    super::stream_to_file(demo_file_path, file_field).await.unwrap();
 
     let mut db_con = crate::db_connection().await;
 
