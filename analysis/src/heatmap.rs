@@ -79,16 +79,13 @@ impl From<u32> for PawnID {
 
 pub fn parse(config: &Config, buf: &[u8]) -> Result<HeatMapOutput, ()> {
     let tmp = csdemo::Container::parse(buf).map_err(|e| ())?;
-    let output = csdemo::parser::parse(
-        csdemo::FrameIterator::parse(tmp.inner),
-        csdemo::parser::EntityFilter::all(),
-    )
-    .map_err(|e| ())?;
+
+    let output = csdemo::lazyparser::LazyParser::new(tmp);
 
     let pawn_ids = {
         let mut tmp = std::collections::HashMap::<PawnID, _>::new();
 
-        for event in output.events.iter() {
+        for event in output.events().filter_map(|e| e.ok()) {
             let entry = match event {
                 csdemo::DemoEvent::GameEvent(ge) => match ge.as_ref() {
                     csdemo::game_event::GameEvent::PlayerSpawn(pspawn) => {
@@ -120,12 +117,12 @@ pub fn parse(config: &Config, buf: &[u8]) -> Result<HeatMapOutput, ()> {
     let mut player_cells = std::collections::HashMap::new();
 
     let mut heatmaps = std::collections::HashMap::new();
-    for tick_state in output.entity_states.ticks.iter() {
-        let _tracing_guard = tracing::debug_span!("Tick", tick=?tick_state.tick).entered();
+    for (tick, state) in output.entities().filter_map(|s| s.ok()) {
+        let _tracing_guard = tracing::debug_span!("Tick", ?tick).entered();
 
         process_tick(
             config,
-            tick_state,
+            &state,
             &pawn_ids,
             &mut teams,
             &mut player_lifestate,
@@ -139,7 +136,7 @@ pub fn parse(config: &Config, buf: &[u8]) -> Result<HeatMapOutput, ()> {
 
     Ok(HeatMapOutput {
         player_heatmaps: heatmaps,
-        player_info: output.player_info,
+        player_info: output.player_info(),
     })
 }
 
@@ -147,7 +144,7 @@ pub const MAX_COORD: f32 = (1 << 14) as f32;
 
 fn process_tick(
     config: &Config,
-    tick_state: &csdemo::parser::EntityTickStates,
+    entity_state: &csdemo::parser::entities::EntityState,
     pawn_ids: &std::collections::HashMap<PawnID, csdemo::UserId>,
     teams: &mut std::collections::HashMap<PawnID, String>,
     player_lifestate: &mut std::collections::HashMap<csdemo::UserId, u32>,
@@ -155,161 +152,159 @@ fn process_tick(
     player_cells: &mut std::collections::HashMap<csdemo::UserId, (u32, u32, u32)>,
     heatmaps: &mut std::collections::HashMap<(csdemo::UserId, String), HeatMap>,
 ) {
-    for entity_state in tick_state
-        .states
-        .iter()
-        .filter(|s| matches!(s.class.as_ref(), "CCSPlayerPawn" | "CCSTeam"))
-    {
-        if entity_state.class.as_ref() == "CCSTeam" {
-            let raw_team_name = match entity_state
-                .get_prop("CCSTeam.m_szTeamname")
-                .map(|p| match &p.value {
-                    csdemo::parser::Variant::String(v) => Some(v),
-                    _ => None,
-                })
-                .flatten()
-            {
-                Some(n) => n,
-                None => continue,
-            };
-
-            for prop in entity_state
-                .props
-                .iter()
-                .filter(|p| p.prop_info.prop_name.as_ref() == "CCSTeam.m_aPawns")
-                .filter_map(|p| p.value.as_u32().map(|v| PawnID::from(v)))
-            {
-                teams.insert(prop, raw_team_name.clone());
-            }
-
-            continue;
-        }
-
-        let pawn_id = PawnID::from(entity_state.id);
-        let user_id = match pawn_ids.get(&pawn_id).cloned() {
-            Some(id) => id,
-            None => continue,
-        };
-        let team = match teams.get(&pawn_id).cloned() {
-            Some(t) => t,
-            None => continue,
-        };
-
-        let _inner_guard = tracing::trace_span!("Entity", entity_id=?entity_state.id).entered();
-
-        let x_cell = match entity_state
-            .get_prop("CCSPlayerPawn.CBodyComponentBaseAnimGraph.m_cellX")
-            .map(|prop| prop.value.as_u32())
-            .flatten()
-        {
-            Some(c) => c,
-            None => player_cells.get(&user_id).map(|(x, _, _)| *x).unwrap_or(0),
-        };
-        let y_cell = match entity_state
-            .get_prop("CCSPlayerPawn.CBodyComponentBaseAnimGraph.m_cellY")
-            .map(|prop| prop.value.as_u32())
-            .flatten()
-        {
-            Some(c) => c,
-            None => player_cells.get(&user_id).map(|(_, y, _)| *y).unwrap_or(0),
-        };
-        let z_cell = match entity_state
-            .get_prop("CCSPlayerPawn.CBodyComponentBaseAnimGraph.m_cellZ")
-            .map(|prop| prop.value.as_u32())
-            .flatten()
-        {
-            Some(c) => c,
-            None => player_cells.get(&user_id).map(|(_, _, z)| *z).unwrap_or(0),
-        };
-
-        player_cells.insert(user_id, (x_cell, y_cell, z_cell));
-
-        let x_coord = match entity_state
-            .get_prop("CCSPlayerPawn.CBodyComponentBaseAnimGraph.m_vecX")
-            .map(|prop| prop.value.as_f32())
-            .flatten()
-        {
-            Some(c) => c,
-            None => player_position
-                .get(&user_id)
-                .map(|(x, _, _)| *x)
-                .unwrap_or(0.0),
-        };
-        let y_coord = match entity_state
-            .get_prop("CCSPlayerPawn.CBodyComponentBaseAnimGraph.m_vecY")
-            .map(|prop| prop.value.as_f32())
-            .flatten()
-        {
-            Some(c) => c,
-            None => player_position
-                .get(&user_id)
-                .map(|(_, y, _)| *y)
-                .unwrap_or(0.0),
-        };
-        let z_coord = match entity_state
-            .get_prop("CCSPlayerPawn.CBodyComponentBaseAnimGraph.m_vecZ")
-            .map(|prop| prop.value.as_f32())
-            .flatten()
-        {
-            Some(c) => c,
-            None => player_position
-                .get(&user_id)
-                .map(|(_, _, z)| *z)
-                .unwrap_or(0.0),
-        };
-
-        player_position.insert(user_id, (x_coord, y_coord, z_coord));
-
-        assert!(x_coord >= 0.0);
-        assert!(y_coord >= 0.0);
-        assert!(z_coord >= 0.0);
-
-        let x_cell_coord = (x_cell as f32 * (1 << 9) as f32) as f32;
-        let y_cell_coord = (y_cell as f32 * (1 << 9) as f32) as f32;
-        let z_cell_coord = (z_cell as f32 * (1 << 9) as f32) as f32;
-
-        let x_coord = x_cell_coord + x_coord;
-        let y_coord = y_cell_coord + y_coord;
-        let z_coord = z_cell_coord + z_coord;
-
-        assert!(x_coord >= 0.0);
-        assert!(y_coord >= 0.0);
-        assert!(z_coord >= 0.0);
-
-        let x_cell = (x_coord / config.cell_size) as usize;
-        let y_cell = (y_coord / config.cell_size) as usize;
-
-        let n_lifestate = entity_state.props.iter().find_map(|prop| {
-            if prop.prop_info.prop_name.as_ref() != "CCSPlayerPawn.m_lifeState" {
-                return None;
-            }
-
-            match prop.value {
-                csdemo::parser::Variant::U32(v) => Some(v),
-                _ => None,
-            }
-        });
-
-        let lifestate = match n_lifestate {
-            Some(state) => {
-                player_lifestate.insert(user_id, state);
-                state
-            }
-            None => player_lifestate.get(&user_id).copied().unwrap_or(1),
-        };
-
-        // 0 means alive
-        if lifestate != 0 {
-            continue;
-        }
-
-        // tracing::trace!("Coord (X, Y, Z): {:?} -> {:?}", (x_coord, y_coord, z_coord), (x_cell, y_cell));
-
-        let heatmap = heatmaps
-            .entry((user_id.clone(), team))
-            .or_insert(HeatMap::new(config.cell_size));
-        heatmap.increment(x_cell, y_cell);
+    if !matches!(entity_state.class.as_ref(), "CCSPlayerPawn" | "CCSTeam") {
+        return;
     }
+
+    if entity_state.class.as_ref() == "CCSTeam" {
+        let raw_team_name = match entity_state
+            .get_prop("CCSTeam.m_szTeamname")
+            .map(|p| match &p.value {
+                csdemo::parser::Variant::String(v) => Some(v),
+                _ => None,
+            })
+            .flatten()
+        {
+            Some(n) => n,
+            None => return,
+        };
+
+        for prop in entity_state
+            .props
+            .iter()
+            .filter(|p| p.prop_info.prop_name.as_ref() == "CCSTeam.m_aPawns")
+            .filter_map(|p| p.value.as_u32().map(|v| PawnID::from(v)))
+        {
+            teams.insert(prop, raw_team_name.clone());
+        }
+
+        return;
+    }
+
+    let pawn_id = PawnID::from(entity_state.id);
+    let user_id = match pawn_ids.get(&pawn_id).cloned() {
+        Some(id) => id,
+        None => return,
+    };
+    let team = match teams.get(&pawn_id).cloned() {
+        Some(t) => t,
+        None => return,
+    };
+
+    let _inner_guard = tracing::trace_span!("Entity", entity_id=?entity_state.id).entered();
+
+    let x_cell = match entity_state
+        .get_prop("CCSPlayerPawn.CBodyComponentBaseAnimGraph.m_cellX")
+        .map(|prop| prop.value.as_u32())
+        .flatten()
+    {
+        Some(c) => c,
+        None => player_cells.get(&user_id).map(|(x, _, _)| *x).unwrap_or(0),
+    };
+    let y_cell = match entity_state
+        .get_prop("CCSPlayerPawn.CBodyComponentBaseAnimGraph.m_cellY")
+        .map(|prop| prop.value.as_u32())
+        .flatten()
+    {
+        Some(c) => c,
+        None => player_cells.get(&user_id).map(|(_, y, _)| *y).unwrap_or(0),
+    };
+    let z_cell = match entity_state
+        .get_prop("CCSPlayerPawn.CBodyComponentBaseAnimGraph.m_cellZ")
+        .map(|prop| prop.value.as_u32())
+        .flatten()
+    {
+        Some(c) => c,
+        None => player_cells.get(&user_id).map(|(_, _, z)| *z).unwrap_or(0),
+    };
+
+    player_cells.insert(user_id, (x_cell, y_cell, z_cell));
+
+    let x_coord = match entity_state
+        .get_prop("CCSPlayerPawn.CBodyComponentBaseAnimGraph.m_vecX")
+        .map(|prop| prop.value.as_f32())
+        .flatten()
+    {
+        Some(c) => c,
+        None => player_position
+            .get(&user_id)
+            .map(|(x, _, _)| *x)
+            .unwrap_or(0.0),
+    };
+    let y_coord = match entity_state
+        .get_prop("CCSPlayerPawn.CBodyComponentBaseAnimGraph.m_vecY")
+        .map(|prop| prop.value.as_f32())
+        .flatten()
+    {
+        Some(c) => c,
+        None => player_position
+            .get(&user_id)
+            .map(|(_, y, _)| *y)
+            .unwrap_or(0.0),
+    };
+    let z_coord = match entity_state
+        .get_prop("CCSPlayerPawn.CBodyComponentBaseAnimGraph.m_vecZ")
+        .map(|prop| prop.value.as_f32())
+        .flatten()
+    {
+        Some(c) => c,
+        None => player_position
+            .get(&user_id)
+            .map(|(_, _, z)| *z)
+            .unwrap_or(0.0),
+    };
+
+    player_position.insert(user_id, (x_coord, y_coord, z_coord));
+
+    assert!(x_coord >= 0.0);
+    assert!(y_coord >= 0.0);
+    assert!(z_coord >= 0.0);
+
+    let x_cell_coord = (x_cell as f32 * (1 << 9) as f32) as f32;
+    let y_cell_coord = (y_cell as f32 * (1 << 9) as f32) as f32;
+    let z_cell_coord = (z_cell as f32 * (1 << 9) as f32) as f32;
+
+    let x_coord = x_cell_coord + x_coord;
+    let y_coord = y_cell_coord + y_coord;
+    let z_coord = z_cell_coord + z_coord;
+
+    assert!(x_coord >= 0.0);
+    assert!(y_coord >= 0.0);
+    assert!(z_coord >= 0.0);
+
+    let x_cell = (x_coord / config.cell_size) as usize;
+    let y_cell = (y_coord / config.cell_size) as usize;
+
+    let n_lifestate = entity_state.props.iter().find_map(|prop| {
+        if prop.prop_info.prop_name.as_ref() != "CCSPlayerPawn.m_lifeState" {
+            return None;
+        }
+
+        match prop.value {
+            csdemo::parser::Variant::U32(v) => Some(v),
+            _ => None,
+        }
+    });
+
+    let lifestate = match n_lifestate {
+        Some(state) => {
+            player_lifestate.insert(user_id, state);
+            state
+        }
+        None => player_lifestate.get(&user_id).copied().unwrap_or(1),
+    };
+
+    // 0 means alive
+    if lifestate != 0 {
+        return;
+    }
+
+    // tracing::trace!("Coord (X, Y, Z): {:?} -> {:?}", (x_coord, y_coord, z_coord), (x_cell, y_cell));
+
+    let heatmap = heatmaps
+        .entry((user_id.clone(), team))
+        .or_insert(HeatMap::new(config.cell_size));
+    heatmap.increment(x_cell, y_cell);
 }
 
 impl core::fmt::Display for HeatMap {

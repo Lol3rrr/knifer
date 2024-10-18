@@ -33,13 +33,10 @@ pub struct PlayerStats {
 
 pub fn parse(buf: &[u8]) -> Result<EndOfGame, ()> {
     let tmp = csdemo::Container::parse(buf).map_err(|e| ())?;
-    let output = csdemo::parser::parse(
-        csdemo::FrameIterator::parse(tmp.inner),
-        csdemo::parser::EntityFilter::all(),
-    )
-    .map_err(|e| ())?;
+    let output = csdemo::lazyparser::LazyParser::new(tmp);
 
-    let header = &output.header;
+    let header = output.file_header().ok_or(())?;
+    let player_info = output.player_info();
 
     let mut player_stats = std::collections::HashMap::<_, PlayerStats>::new();
     let mut pawn_to_player =
@@ -47,7 +44,7 @@ pub fn parse(buf: &[u8]) -> Result<EndOfGame, ()> {
 
     let mut track = false;
     let mut player_life = std::collections::HashMap::<_, u8>::new();
-    for event in output.events.iter() {
+    for event in output.events().filter_map(|e| e.ok()) {
         match event {
             csdemo::DemoEvent::GameEvent(gevent) => {
                 match gevent.as_ref() {
@@ -84,15 +81,10 @@ pub fn parse(buf: &[u8]) -> Result<EndOfGame, ()> {
                         track = false;
                     }
                     csdemo::game_event::GameEvent::PlayerDeath(pdeath) if track => {
-                        player_death(pdeath, &output.player_info, &mut player_stats);
+                        player_death(pdeath, &player_info, &mut player_stats);
                     }
                     csdemo::game_event::GameEvent::PlayerHurt(phurt) if track => {
-                        player_hurt(
-                            phurt,
-                            &output.player_info,
-                            &mut player_stats,
-                            &mut player_life,
-                        );
+                        player_hurt(phurt, &player_info, &mut player_stats, &mut player_life);
                     }
                     _ => {}
                 };
@@ -104,55 +96,53 @@ pub fn parse(buf: &[u8]) -> Result<EndOfGame, ()> {
     let mut teams = std::collections::HashMap::<i32, TeamInfo>::new();
 
     let mut entity_to_team = std::collections::HashMap::new();
-    for tick_state in output.entity_states.ticks {
-        for state in tick_state.states {
-            let team = match csdemo::structured::ccsteam::CCSTeam::try_from(&state) {
-                Ok(t) => t,
-                Err(_) => continue,
-            };
+    for (tick, state) in output.entities().filter_map(|e| e.ok()) {
+        let team = match csdemo::structured::ccsteam::CCSTeam::try_from(&state) {
+            Ok(t) => t,
+            Err(_) => continue,
+        };
 
-            let pawns = team.player_pawns();
-            let player_ids = pawns
-                .into_iter()
-                .filter_map(|pawn| pawn_to_player.get(&pawn))
-                .collect::<Vec<_>>();
-            if player_ids.is_empty() {
-                if let Some(team_number) = entity_to_team.get(&team.entity_id()) {
-                    if let Some(score) = team.score() {
-                        if let Some(team_entry) = teams.get_mut(team_number) {
-                            team_entry.end_score = score as usize;
-                        }
+        let pawns = team.player_pawns();
+        let player_ids = pawns
+            .into_iter()
+            .filter_map(|pawn| pawn_to_player.get(&pawn))
+            .collect::<Vec<_>>();
+        if player_ids.is_empty() {
+            if let Some(team_number) = entity_to_team.get(&team.entity_id()) {
+                if let Some(score) = team.score() {
+                    if let Some(team_entry) = teams.get_mut(team_number) {
+                        team_entry.end_score = score as usize;
                     }
                 }
-
-                continue;
             }
 
-            let team_number = player_ids
-                .iter()
-                .filter_map(|p| output.player_info.get(*p).map(|p| p.team))
-                .next()
-                .unwrap();
+            continue;
+        }
 
-            entity_to_team.insert(team.entity_id(), team_number);
+        let team_number = player_ids
+            .iter()
+            .filter_map(|p| player_info.get(*p).map(|p| p.team))
+            .next()
+            .unwrap();
 
-            let team_entry = teams.entry(team_number).or_insert_with(|| TeamInfo {
-                end_score: 0,
-                start_side: team
-                    .team_name()
-                    .map(|t| t.to_owned())
-                    .unwrap_or(String::new()),
-            });
-            if let Some(score) = team.score() {
-                team_entry.end_score = score as usize;
-            }
+        entity_to_team.insert(team.entity_id(), team_number);
+
+        let team_entry = teams.entry(team_number).or_insert_with(|| TeamInfo {
+            end_score: 0,
+            start_side: team
+                .team_name()
+                .map(|t| t.to_owned())
+                .unwrap_or(String::new()),
+        });
+        if let Some(score) = team.score() {
+            team_entry.end_score = score as usize;
         }
     }
 
     let mut players: Vec<_> = player_stats
         .into_iter()
         .filter_map(|(id, stats)| {
-            let player = output.player_info.get(&id)?;
+            let player = player_info.get(&id)?;
 
             Some((
                 PlayerInfo {

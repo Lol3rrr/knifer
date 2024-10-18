@@ -695,7 +695,7 @@ dependencies = [
 [[package]]
 name = "csdemo"
 version = "0.1.0"
-source = "git+https://github.com/Lol3rrr/csdemo.git#a0eab7c68f14e4e846823d0468ef196cf4c85fa5"
+source = "git+https://github.com/Lol3rrr/csdemo.git#4b1cb505667fd024174ba91fa19f9dd7a410fd30"
 dependencies = [
  "bitter",
  "phf",
