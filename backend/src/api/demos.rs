@@ -456,7 +456,11 @@ async fn perround(
         .map(|dteam| common::demo_analysis::PerRoundTeam {
             name: dteam.start_name,
             number: dteam.team as u32,
-            players: players.iter().filter(|p| p.team == dteam.team).map(|p| p.name.clone()).collect(),
+            players: players
+                .iter()
+                .filter(|p| p.team == dteam.team)
+                .map(|p| p.name.clone())
+                .collect(),
         })
         .collect();
 

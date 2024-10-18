@@ -64,7 +64,8 @@ pub async fn run_api(
     let serve_dir = option_env!("FRONTEND_DIST_DIR").unwrap_or("../frontend/dist/");
     tracing::debug!("Serving static files from {:?}", serve_dir);
 
-    let steam_callback_base_url = std::env::var("BASE_URL").unwrap_or("http://localhost:3000".to_owned());
+    let steam_callback_base_url =
+        std::env::var("BASE_URL").unwrap_or("http://localhost:3000".to_owned());
     tracing::debug!("Base-URL: {:?}", steam_callback_base_url);
 
     let router = axum::Router::new()
@@ -93,68 +94,63 @@ pub async fn run_api(
 #[tracing::instrument(skip(upload_folder))]
 pub async fn run_analysis(upload_folder: impl Into<std::path::PathBuf>) {
     use diesel::prelude::*;
-    use diesel_async::{AsyncConnection, RunQueryDsl};
+    use diesel_async::RunQueryDsl;
 
     let upload_folder: std::path::PathBuf = upload_folder.into();
 
     loop {
         let mut db_con = db_connection().await;
-        let input = match crate::analysis::poll_next_task(&upload_folder, &mut db_con).await {
-            Ok(i) => i,
-            Err(e) => {
-                tracing::error!("Polling for next Task: {:?}", e);
-                tokio::time::sleep(std::time::Duration::from_secs(30)).await;
-                continue;
-            }
-        };
 
-        let demo_id = input.demoid.clone();
-
-        let mut store_result_fns = Vec::new();
-        for analysis in analysis::ANALYSIS_METHODS.iter().map(|a| a.clone()) {
-            let input = input.clone();
-            let store_result =
-                match tokio::task::spawn_blocking(move || analysis.analyse(input)).await {
-                    Ok(Ok(r)) => r,
-                    Ok(Err(e)) => {
-                        tracing::error!("Analysis failed: {:?}", e);
-                        continue;
-                    }
-                    Err(e) => {
-                        tracing::error!("Joining Task: {:?}", e);
-                        continue;
-                    }
-                };
-
-            store_result_fns.push(store_result);
-        }
-
-        let mut db_con = crate::db_connection().await;
-
-        let update_process_info =
-            diesel::dsl::update(crate::schema::processing_status::dsl::processing_status)
-                .set(crate::schema::processing_status::dsl::info.eq(1))
-                .filter(crate::schema::processing_status::dsl::demo_id.eq(demo_id));
-
-        let store_res = db_con
-            .transaction::<'_, '_, '_, _, diesel::result::Error, _>(|conn| {
+        let res = crate::analysis::poll_next_task(
+            &upload_folder,
+            &mut db_con,
+            move |input: analysis::AnalysisInput, db_con: &mut diesel_async::AsyncPgConnection| {
                 Box::pin(async move {
-                    for store_fn in store_result_fns {
-                        store_fn(conn).await?;
-                    }
-                    update_process_info.execute(conn).await?;
+                    let demo_id = input.demoid.clone();
 
-                    Ok(())
+                    let mut store_result_fns = Vec::new();
+                    for analysis in analysis::ANALYSIS_METHODS.iter().map(|a| a.clone()) {
+                        let input = input.clone();
+                        let store_result = match tokio::task::spawn_blocking(move || {
+                            analysis.analyse(input)
+                        })
+                        .await
+                        {
+                            Ok(Ok(r)) => r,
+                            Ok(Err(e)) => {
+                                tracing::error!("Analysis failed: {:?}", e);
+                                continue;
+                            }
+                            Err(e) => {
+                                tracing::error!("Joining Task: {:?}", e);
+                                continue;
+                            }
+                        };
+
+                        store_result_fns.push(store_result);
+                    }
+
+                    let update_process_info = diesel::dsl::update(
+                        crate::schema::processing_status::dsl::processing_status,
+                    )
+                    .set(crate::schema::processing_status::dsl::info.eq(1))
+                    .filter(crate::schema::processing_status::dsl::demo_id.eq(demo_id));
+
+                    for store_fn in store_result_fns {
+                        store_fn(db_con).await.map_err(|e| ())?;
+                    }
+                    update_process_info.execute(db_con).await.map_err(|e| ())?;
+
+                    Ok::<(), ()>(())
                 })
-            })
-            .await;
-        match store_res {
-            Ok(_) => {
-                tracing::info!("Stored analysis results");
-            }
-            Err(e) => {
-                tracing::error!("Failed to store results: {:?}", e);
-            }
-        };
+            },
+        )
+        .await;
+
+        if let Err(e) = res {
+            tracing::error!("Polling for next Task: {:?}", e);
+            tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+            continue;
+        }
     }
 }

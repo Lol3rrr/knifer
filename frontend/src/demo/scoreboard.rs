@@ -25,8 +25,10 @@ pub fn scoreboard() -> impl leptos::IntoView {
             .get()
             .into_iter()
             .flat_map(|v| v.teams.into_iter())
-            .map(|(team, players)| view! {
-                <TeamScoreboard value=players team_name=format!("Team {}", team) />
+            .map(|(team, players)| {
+                view! {
+                    <TeamScoreboard value=players team_name=format!("Team {}", team) />
+                }
             })
             .collect::<Vec<_>>()
     };
@@ -46,7 +48,10 @@ mod orderings {
     #[derive(Debug, Clone)]
     pub struct Ordering {
         name: SelectedStat,
-        pub sort_fn: fn(p1: &common::demo_analysis::ScoreBoardPlayer, p2: &common::demo_analysis::ScoreBoardPlayer) -> core::cmp::Ordering,
+        pub sort_fn: fn(
+            p1: &common::demo_analysis::ScoreBoardPlayer,
+            p2: &common::demo_analysis::ScoreBoardPlayer,
+        ) -> core::cmp::Ordering,
     }
 
     impl Ordering {
@@ -89,7 +94,10 @@ mod orderings {
 }
 
 #[leptos::component]
-fn team_scoreboard(value: Vec<common::demo_analysis::ScoreBoardPlayer>, team_name: String) -> impl IntoView {
+fn team_scoreboard(
+    value: Vec<common::demo_analysis::ScoreBoardPlayer>,
+    team_name: String,
+) -> impl IntoView {
     let (ordering, set_ordering) = create_signal::<orderings::Ordering>(orderings::DAMAGE);
 
     let style = stylers::style! {

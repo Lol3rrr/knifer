@@ -14,25 +14,23 @@ fn to_coloumn(idx: usize) -> usize {
 
 #[leptos::component]
 pub fn per_round() -> impl leptos::IntoView {
-    let perround_resource =
-        create_resource(leptos_router::use_params_map(), |params| async move {
-            let id = params.get("id").unwrap();
+    let perround_resource = create_resource(leptos_router::use_params_map(), |params| async move {
+        let id = params.get("id").unwrap();
 
-            let res =
-                reqwasm::http::Request::get(&format!("/api/demos/{}/analysis/perround", id))
-                    .send()
-                    .await
-                    .unwrap();
-            res.json::<common::demo_analysis::PerRoundResult>()
-                .await
-                .unwrap()
-        });
- 
+        let res = reqwasm::http::Request::get(&format!("/api/demos/{}/analysis/perround", id))
+            .send()
+            .await
+            .unwrap();
+        res.json::<common::demo_analysis::PerRoundResult>()
+            .await
+            .unwrap()
+    });
+
     let style = stylers::style! {
         "PerRound",
         .round_overview {
             display: inline-grid;
-            
+
             width: 90vw;
             grid-template-columns: auto repeat(12, 1fr) 5px repeat(12, 1fr) 5px repeat(3, 1fr) 5px repeat(3, 1fr);
             grid-template-rows: repeat(3, auto);
@@ -73,7 +71,10 @@ pub fn per_round() -> impl leptos::IntoView {
     let events_list = move || {
         let round_index = round();
         let data = perround_resource.get();
-        let current_round = data.as_ref().map(|rs| rs.rounds.get(round_index).cloned()).flatten();
+        let current_round = data
+            .as_ref()
+            .map(|rs| rs.rounds.get(round_index).cloned())
+            .flatten();
         let teams = data.as_ref().map(|rs| rs.teams.clone());
 
         match (current_round, teams) {
@@ -171,13 +172,22 @@ pub fn per_round() -> impl leptos::IntoView {
             None => return view! {}.into_view(),
         };
 
-        let upper = perround_teams.iter().find(|t| t.name == "CT").map(|t| t.number).unwrap_or(0);
-        let lower = perround_teams.iter().find(|t| t.name == "TERRORIST").map(|t| t.number).unwrap_or(0);
+        let upper = perround_teams
+            .iter()
+            .find(|t| t.name == "CT")
+            .map(|t| t.number)
+            .unwrap_or(0);
+        let lower = perround_teams
+            .iter()
+            .find(|t| t.name == "TERRORIST")
+            .map(|t| t.number)
+            .unwrap_or(0);
 
         view! {
             <span style="grid-column: 1; grid-row: 1">Team { upper }</span>
             <span style="grid-column: 1; grid-row: 3">Team { lower }</span>
-        }.into_view()
+        }
+        .into_view()
     };
 
     view! {

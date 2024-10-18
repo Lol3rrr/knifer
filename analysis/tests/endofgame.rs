@@ -11,13 +11,24 @@ fn endofgame_nuke() {
 
     let expected = endofgame::EndOfGame {
         map: "de_nuke".to_owned(),
-        teams: [(2, endofgame::TeamInfo {
-            end_score: 13,
-            start_side: "CT".into(),
-        }), (3, endofgame::TeamInfo {
-                end_score: 8,
-                start_side: "TERRORIST".into()
-            })].into_iter().collect(),
+        teams: [
+            (
+                2,
+                endofgame::TeamInfo {
+                    end_score: 13,
+                    start_side: "CT".into(),
+                },
+            ),
+            (
+                3,
+                endofgame::TeamInfo {
+                    end_score: 8,
+                    start_side: "TERRORIST".into(),
+                },
+            ),
+        ]
+        .into_iter()
+        .collect(),
         players: vec![
             (
                 endofgame::PlayerInfo {

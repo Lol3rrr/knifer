@@ -4,19 +4,17 @@ use super::CurrentDemoName;
 
 #[leptos::component]
 pub fn heatmaps() -> impl leptos::IntoView {
-    let heatmaps_resource =
-        create_resource(leptos_router::use_params_map(), |params| async move {
-            let id = params.get("id").unwrap();
+    let heatmaps_resource = create_resource(leptos_router::use_params_map(), |params| async move {
+        let id = params.get("id").unwrap();
 
-            let res =
-                reqwasm::http::Request::get(&format!("/api/demos/{}/analysis/heatmap", id))
-                    .send()
-                    .await
-                    .unwrap();
-            res.json::<Vec<common::demo_analysis::PlayerHeatmap>>()
-                .await
-                .unwrap()
-        });
+        let res = reqwasm::http::Request::get(&format!("/api/demos/{}/analysis/heatmap", id))
+            .send()
+            .await
+            .unwrap();
+        res.json::<Vec<common::demo_analysis::PlayerHeatmap>>()
+            .await
+            .unwrap()
+    });
 
     let style = stylers::style! {
         "Heatmap-Wrapper",
@@ -55,7 +53,7 @@ fn heatmap_view(heatmaps: Vec<common::demo_analysis::PlayerHeatmap>) -> impl lep
         .heatmap_container {
             display: inline-block;
         }
-    
+
         .heatmap_image {
             width: min(40vw, 60vh);
             height: min(40vw, 60vh);
@@ -111,17 +109,27 @@ fn heatmap_view(heatmaps: Vec<common::demo_analysis::PlayerHeatmap>) -> impl lep
 
         let player = players.get(idx).unwrap();
 
-        set_value(heatmaps.iter().filter(|h| &h.name == player).cloned().collect());
+        set_value(
+            heatmaps
+                .iter()
+                .filter(|h| &h.name == player)
+                .cloned()
+                .collect(),
+        );
         set_idx(idx);
     };
 
     let players = og_players;
     let select_values = move || {
-        players.iter().enumerate().map(|(idx, name)| {
-            view! {
-                <option value={idx}>{ format!("{}", name) }</option>
-            }
-        }).collect::<Vec<_>>()
+        players
+            .iter()
+            .enumerate()
+            .map(|(idx, name)| {
+                view! {
+                    <option value={idx}>{ format!("{}", name) }</option>
+                }
+            })
+            .collect::<Vec<_>>()
     };
 
     view! {
@@ -132,7 +140,7 @@ fn heatmap_view(heatmaps: Vec<common::demo_analysis::PlayerHeatmap>) -> impl lep
             </select>
             <br />
 
-            { heatmap_view } 
+            { heatmap_view }
         </div>
     }
 }

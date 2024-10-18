@@ -20,7 +20,7 @@ fn main() {
                         <Route path="/demo/:id" view=Demo>
                             <Route path="perround" view=frontend::demo::perround::PerRound />
                             <Route path="scoreboard" view=frontend::demo::scoreboard::Scoreboard />
-                            <Route path="heatmaps" view=frontend::demo::heatmap::Heatmaps />                
+                            <Route path="heatmaps" view=frontend::demo::heatmap::Heatmaps />
                             <Route path="" view=frontend::demo::scoreboard::Scoreboard />
                         </Route>
                     </Routes>

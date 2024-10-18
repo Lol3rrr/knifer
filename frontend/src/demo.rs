@@ -2,8 +2,8 @@ use leptos::*;
 use leptos_router::{Outlet, A};
 
 pub mod heatmap;
-pub mod scoreboard;
 pub mod perround;
+pub mod scoreboard;
 
 #[derive(Debug, Clone)]
 struct CurrentDemoName(ReadSignal<String>);
@@ -31,10 +31,10 @@ pub fn demo() -> impl leptos::IntoView {
         },
     );
 
-    let rerun_analysis = create_action(move |_: &()| {
-        async move {
-            let _ = reqwasm::http::Request::get(&format!("/api/demos/{}/reanalyse", id())).send().await;
-        }
+    let rerun_analysis = create_action(move |_: &()| async move {
+        let _ = reqwasm::http::Request::get(&format!("/api/demos/{}/reanalyse", id()))
+            .send()
+            .await;
     });
 
     let map = move || match demo_info.get() {
