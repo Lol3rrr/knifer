@@ -1,11 +1,37 @@
-use std::path::PathBuf;
-
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 
 pub mod base;
 pub mod heatmap;
 pub mod perround;
+
+#[derive(Debug, Clone)]
+pub struct AnalysisInput {
+    pub steamid: String,
+    pub demoid: String,
+    data: std::sync::Arc<memmap2::Mmap>,
+}
+
+impl AnalysisInput {
+    pub async fn load(
+        steamid: String,
+        demoid: String,
+        path: impl AsRef<std::path::Path>,
+    ) -> Result<Self, ()> {
+        let file = std::fs::File::open(path.as_ref()).unwrap();
+        let mmap = unsafe { memmap2::MmapOptions::new().map(&file).unwrap() };
+
+        Ok(Self {
+            steamid,
+            demoid,
+            data: std::sync::Arc::new(mmap),
+        })
+    }
+
+    pub fn data(&self) -> &[u8] {
+        &self.data
+    }
+}
 
 pub trait Analysis {
     fn analyse(
@@ -86,13 +112,15 @@ where
                         None => return Ok(None),
                     };
 
-                    let input = AnalysisInput {
-                        path: upload_folder
+                    let input = AnalysisInput::load(
+                        task.steam_id.clone(),
+                        task.demo_id.clone(),
+                        upload_folder
                             .join(&task.steam_id)
                             .join(format!("{}.dem", task.demo_id)),
-                        steamid: task.steam_id.clone(),
-                        demoid: task.demo_id.clone(),
-                    };
+                    )
+                    .await
+                    .unwrap();
 
                     let tmp = action(input, &mut *conn);
                     tmp.await.map_err(|e| TaskError::RunningAction(e))?;
@@ -120,11 +148,4 @@ where
             }
         };
     }
-}
-
-#[derive(Debug, Clone)]
-pub struct AnalysisInput {
-    pub steamid: String,
-    pub demoid: String,
-    pub path: PathBuf,
 }

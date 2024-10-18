@@ -29,11 +29,8 @@ impl Analysis for HeatmapAnalysis {
     > {
         tracing::info!("Generating HEATMAPs");
 
-        let file = std::fs::File::open(&input.path).unwrap();
-        let mmap = unsafe { memmap2::MmapOptions::new().map(&file).unwrap() };
-
         let config = analysis::heatmap::Config { cell_size: 5.0 };
-        let result = analysis::heatmap::parse(&config, &mmap).unwrap();
+        let result = analysis::heatmap::parse(&config, input.data()).unwrap();
 
         tracing::info!("Got {} Entity-Heatmaps", result.player_heatmaps.len());
         let heatmap_result: Vec<_> = result

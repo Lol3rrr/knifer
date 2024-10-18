@@ -27,10 +27,7 @@ impl Analysis for PerRoundAnalysis {
         >,
         (),
     > {
-        let file = std::fs::File::open(&input.path).unwrap();
-        let mmap = unsafe { memmap2::MmapOptions::new().map(&file).unwrap() };
-
-        let result = analysis::perround::parse(&mmap).unwrap();
+        let result = analysis::perround::parse(input.data()).unwrap();
 
         let values: Vec<crate::models::DemoRound> = result
             .rounds

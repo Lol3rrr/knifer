@@ -59,10 +59,7 @@ impl Analysis for BaseAnalysis {
     > {
         tracing::info!("Performing Base analysis");
 
-        let file = std::fs::File::open(&input.path).unwrap();
-        let mmap = unsafe { memmap2::MmapOptions::new().map(&file).unwrap() };
-
-        let result = analysis::endofgame::parse(&mmap).unwrap();
+        let result = analysis::endofgame::parse(input.data()).unwrap();
 
         let base_result = BaseInfo {
             map: result.map,

@@ -84,7 +84,7 @@ async fn list(
 
     // Sort this
     let mut output = demos.into_values().collect::<Vec<_>>();
-    output.sort_unstable_by_key(|d| d.uploaded_at);
+    output.sort_unstable_by_key(|d| std::cmp::Reverse(d.uploaded_at));
 
     Ok(axum::response::Json(output))
 }
@@ -130,7 +130,9 @@ async fn upload(
 
     let demo_file_path = user_folder.join(format!("{}.dem", demo_id));
 
-    super::stream_to_file(demo_file_path, file_field).await.unwrap();
+    super::stream_to_file(demo_file_path, file_field)
+        .await
+        .unwrap();
 
     let mut db_con = crate::db_connection().await;
 
