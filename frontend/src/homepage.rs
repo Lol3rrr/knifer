@@ -39,7 +39,11 @@ fn demo_list(demos: impl SignalGet<Value = Option<Vec<common::BaseDemoInfo>>> + 
     view! {
         class=style,
         <div class="list">
-            { move || demos.get().unwrap_or_default().into_iter().enumerate().map(|(i, demo)| view! { <DemoListEntry demo idx=i /> }).collect::<Vec<_>>() }
+            <span>Score</span>
+            <span>Date</span>
+            <span>Map</span>
+
+            { move || demos.get().unwrap_or_default().into_iter().enumerate().map(|(i, demo)| view! { <DemoListEntry demo idx=i+1 /> }).collect::<Vec<_>>() }
         </div>
     }
 }
