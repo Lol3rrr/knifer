@@ -20,8 +20,12 @@ fn main() {
                     <Routes>
                         <Route path="/" view=move || view! { <Homepage get_notification=get_reload_demos /> } />
                         <Route path="/demo/:id" view=Demo>
+                            <Route path="scoreboard" view=frontend::demo::scoreboard::Scoreboard>
+                                <Route path="general" view=frontend::demo::scoreboard::general::General />
+                                <Route path="utility" view=frontend::demo::scoreboard::utility::Utility />                    
+                                <Route path="" view=frontend::demo::scoreboard::general::General />
+                            </Route>
                             <Route path="perround" view=frontend::demo::perround::PerRound />
-                            <Route path="scoreboard" view=frontend::demo::scoreboard::Scoreboard />
                             <Route path="heatmaps" view=frontend::demo::heatmap::Heatmaps />
                             <Route path="" view=frontend::demo::scoreboard::Scoreboard />
                         </Route>

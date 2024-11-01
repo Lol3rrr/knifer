@@ -1,46 +1,20 @@
 use leptos::*;
+use leptos_router::Outlet;
+
+pub mod general;
+pub mod utility;
+
+use crate::demo::TabBar;
 
 #[leptos::component]
 pub fn scoreboard() -> impl leptos::IntoView {
-    use leptos::Suspense;
-
-    let scoreboard_resource =
-        create_resource(leptos_router::use_params_map(), |params| async move {
-            let id = params.get("id").unwrap();
-
-            let res =
-                reqwasm::http::Request::get(&format!("/api/demos/{}/analysis/scoreboard", id))
-                    .send()
-                    .await
-                    .unwrap();
-            res.json::<common::demo_analysis::ScoreBoard>()
-                .await
-                .unwrap()
-        });
-
-    let (ordering, set_ordering) = create_signal::<orderings::Ordering>(orderings::DAMAGE);
-
-    let scoreboards = move || {
-        scoreboard_resource
-            .get()
-            .into_iter()
-            .flat_map(|v| v.teams.into_iter())
-            .map(|team| {
-                view! {
-                    <TeamScoreboard value=team.players team_name=format!("Team {} - {}", team.number, team.score) />
-                }
-            })
-            .collect::<Vec<_>>()
-    };
+    let params = leptos_router::use_params_map();
+    let id = move || params.with(|params| params.get("id").cloned().unwrap_or_default());
 
     view! {
-        <h2>Scoreboard</h2>
+        <TabBar prefix=move || format!("/demo/{}/scoreboard", id()) parts=&[("general", "General"), ("utility", "Utility")] />
 
-        <Suspense
-            fallback=move || view! { <p>Loading Scoreboard data</p> }
-        >
-            { scoreboards }
-        </Suspense>
+        <Outlet />
     }
 }
 

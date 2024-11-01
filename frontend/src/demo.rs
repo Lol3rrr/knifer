@@ -79,13 +79,62 @@ pub fn demo() -> impl leptos::IntoView {
         <h2>Demo - { id } - { map }</h2>
 
         <button on:click=move |_| rerun_analysis.dispatch(())>Rerun analysis</button>
-        <div class="analysis_bar">
-            <div class="analysis_selector" class:current=move || selected_tab() == "scoreboard"><A href="scoreboard"><span>Scoreboard</span></A></div>
-            <div class="analysis_selector" class:current=move || selected_tab() == "perround"><A href="perround"><span>Per Round</span></A></div>
-            <div class="analysis_selector" class:current=move || selected_tab() == "heatmaps"><A href="heatmaps"><span>Heatmaps</span></A></div>
-        </div>
+        <TabBar prefix=move || format!("/demo/{}/", id()) parts=&[("scoreboard", "Scoreboard"), ("perround", "Per Round"), ("heatmaps", "Heatmaps")] />
         <div>
             <Outlet/>
+        </div>
+    }
+}
+
+#[leptos::component]
+pub fn tab_bar<P>(prefix: P, parts: &'static [(&'static str, &'static str)]) -> impl leptos::IntoView where P: Fn() -> String + Copy + 'static {
+    let selected_tab = move || {
+        let prefix = prefix();
+        let loc = leptos_router::use_location();
+        let loc_path = loc.pathname.get();
+        let trailing = loc_path.strip_prefix(&prefix).unwrap_or(&loc_path).split('/').filter(|l| !l.is_empty()).next();
+        trailing.or(parts.first().map(|p| p.0)).unwrap_or("").to_owned()
+    };
+
+    let style = stylers::style! {
+        "Demo",
+        .analysis_bar {
+            display: grid;
+            grid-template-columns: repeat(var(--rows), auto);
+            column-gap: 20px;
+
+            background-color: #2d2d2d;
+        }
+
+        .analysis_selector {
+            display: inline-block;
+        }
+
+        span {
+            display: inline-block;
+
+            padding: 1vw 1vh;
+            color: #d5d5d5;
+            background-color: #4d4d4d;
+        }
+        .current {
+            background-color: #5d5d5d;
+        }
+    };
+
+    let tabs = move || parts.into_iter().map(|(routename, name)| {
+        view! {class=style,
+            <div class="analysis_selector" class:current=move || selected_tab() == routename.to_string()>
+                <A href=routename.to_string()>
+                    <span>{ name.to_string() }</span>
+                </A>
+            </div>
+        }
+    }).collect::<Vec<_>>();
+
+    view! {class = style,
+        <div class="analysis_bar" style=format!("--rows: {}", parts.len())>
+            { tabs }
         </div>
     }
 }
