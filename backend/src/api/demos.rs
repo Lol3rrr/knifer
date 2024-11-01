@@ -46,7 +46,8 @@ async fn list(
         )
         .inner_join(
             crate::schema::demo_players::table
-                .on(crate::schema::demos::dsl::demo_id.eq(crate::schema::demo_players::dsl::demo_id))
+                .on(crate::schema::demos::dsl::demo_id
+                    .eq(crate::schema::demo_players::dsl::demo_id)),
         )
         .select((
             crate::models::Demo::as_select(),
@@ -54,7 +55,11 @@ async fn list(
             crate::models::DemoTeam::as_select(),
             crate::models::DemoPlayer::as_select(),
         ))
-        .filter(crate::schema::demos::dsl::steam_id.eq(steam_id.to_string()).and(crate::schema::demo_players::dsl::steam_id.eq(steam_id.to_string())));
+        .filter(
+            crate::schema::demos::dsl::steam_id
+                .eq(steam_id.to_string())
+                .and(crate::schema::demo_players::dsl::steam_id.eq(steam_id.to_string())),
+        );
     let pending_query = crate::schema::demos::dsl::demos
         .inner_join(crate::schema::processing_status::table.on(
             crate::schema::demos::dsl::demo_id.eq(crate::schema::processing_status::dsl::demo_id),
@@ -294,18 +299,34 @@ async fn scoreboard(
                     ),
             ),
         )
-        .filter(crate::schema::demo_players::dsl::demo_id.eq(demo_id));
+        .filter(crate::schema::demo_players::dsl::demo_id.eq(demo_id.clone()));
+
+    let team_query = crate::schema::demo_teams::dsl::demo_teams
+        .filter(crate::schema::demo_teams::dsl::demo_id.eq(demo_id));
 
     let mut db_con = crate::db_connection().await;
 
-    let response: Vec<(crate::models::DemoPlayer, crate::models::DemoPlayerStats)> =
-        match query.load(&mut db_con).await {
-            Ok(d) => d,
-            Err(e) => {
-                tracing::error!("Querying DB: {:?}", e);
-                return Err(axum::http::StatusCode::INTERNAL_SERVER_ERROR);
-            }
-        };
+    let db_result = db_con
+        .build_transaction()
+        .read_only()
+        .run::<_, diesel::result::Error, _>(|con| {
+            Box::pin(async move {
+                let players: Vec<(crate::models::DemoPlayer, crate::models::DemoPlayerStats)> =
+                    query.load(con).await?;
+                let teams: Vec<crate::models::DemoTeam> = team_query.load(con).await?;
+
+                Ok((players, teams))
+            })
+        })
+        .await;
+
+    let (response, team_response) = match db_result {
+        Ok(d) => d,
+        Err(e) => {
+            tracing::error!("Querying DB {:?}", e);
+            return Err(axum::http::StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    };
 
     if response.is_empty() {
         tracing::error!("DB Response was empty");
@@ -314,9 +335,16 @@ async fn scoreboard(
 
     let mut teams = std::collections::BTreeMap::new();
     for (player, stats) in response {
-        let team = teams.entry(player.team as u32).or_insert(Vec::new());
+        let team =
+            teams
+                .entry(player.team as u32)
+                .or_insert(common::demo_analysis::ScoreBoardTeam {
+                    number: player.team as u32,
+                    players: Vec::new(),
+                    score: 0,
+                });
 
-        team.push(common::demo_analysis::ScoreBoardPlayer {
+        team.players.push(common::demo_analysis::ScoreBoardPlayer {
             name: player.name,
             kills: stats.kills as usize,
             deaths: stats.deaths as usize,
@@ -325,8 +353,15 @@ async fn scoreboard(
         });
     }
 
+    for team in team_response {
+        let number = team.team as u32;
+        if let Some(entry) = teams.get_mut(&number) {
+            entry.score = team.end_score;
+        }
+    }
+
     Ok(axum::Json(common::demo_analysis::ScoreBoard {
-        teams: teams.into_iter().collect::<Vec<_>>(),
+        teams: teams.into_values().collect::<Vec<_>>(),
     }))
 }
 

@@ -25,9 +25,9 @@ pub fn scoreboard() -> impl leptos::IntoView {
             .get()
             .into_iter()
             .flat_map(|v| v.teams.into_iter())
-            .map(|(team, players)| {
+            .map(|team| {
                 view! {
-                    <TeamScoreboard value=players team_name=format!("Team {}", team) />
+                    <TeamScoreboard value=team.players team_name=format!("Team {} - {}", team.number, team.score) />
                 }
             })
             .collect::<Vec<_>>()

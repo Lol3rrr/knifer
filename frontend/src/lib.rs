@@ -112,23 +112,24 @@ pub fn upload_demo(
 
     let uploading = RwSignal::new(false);
 
-    let handle_resp: std::rc::Rc<dyn Fn(&leptos::web_sys::Response)> = std::rc::Rc::new(move |resp: &leptos::web_sys::Response| {
-        if resp.status() != 200 {
-            // TODO
-            // Display error somehow
-            return;
-        }
+    let handle_resp: std::rc::Rc<dyn Fn(&leptos::web_sys::Response)> =
+        std::rc::Rc::new(move |resp: &leptos::web_sys::Response| {
+            if resp.status() != 200 {
+                // TODO
+                // Display error somehow
+                return;
+            }
 
-        uploading.set(false);
+            uploading.set(false);
 
-        // Remove the Upload popup
-        update_shown.set(DemoUploadStatus::Hidden);
+            // Remove the Upload popup
+            update_shown.set(DemoUploadStatus::Hidden);
 
-        // Reload the demo list
-        reload_demos.update(|v| {
-            *v = v.wrapping_add(1);
+            // Reload the demo list
+            reload_demos.update(|v| {
+                *v = v.wrapping_add(1);
+            });
         });
-    });
 
     let on_submit: std::rc::Rc<dyn Fn(&leptos::web_sys::FormData)> = std::rc::Rc::new(move |_| {
         uploading.set(true);

@@ -1,6 +1,13 @@
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct ScoreBoard {
-    pub teams: Vec<(u32, Vec<ScoreBoardPlayer>)>,
+    pub teams: Vec<ScoreBoardTeam>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct ScoreBoardTeam {
+    pub number: u32,
+    pub score: i16,
+    pub players: Vec<ScoreBoardPlayer>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]

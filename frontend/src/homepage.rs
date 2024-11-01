@@ -3,9 +3,7 @@ use leptos::*;
 #[leptos::component]
 pub fn homepage(get_notification: ReadSignal<u8>) -> impl leptos::IntoView {
     let demo_data = create_resource(
-        move || {
-            get_notification.get()
-        },
+        move || get_notification.get(),
         |_| async move {
             let res = reqwasm::http::Request::get("/api/demos/list")
                 .send()
@@ -16,11 +14,17 @@ pub fn homepage(get_notification: ReadSignal<u8>) -> impl leptos::IntoView {
         },
     );
 
-    let pending_display = move || demo_data.get().map(|d| d.pending).filter(|p| p.len() > 0).map(|pending| {
-        view! {
-            <p>{pending.len()} demos are pending/waiting for analysis</p>
-        }
-    });
+    let pending_display = move || {
+        demo_data
+            .get()
+            .map(|d| d.pending)
+            .filter(|p| p.len() > 0)
+            .map(|pending| {
+                view! {
+                    <p>{pending.len()} demos are pending/waiting for analysis</p>
+                }
+            })
+    };
 
     view! {
         <div>
@@ -117,8 +121,8 @@ fn demo_list_entry(demo: common::BaseDemoInfo, idx: usize) -> impl leptos::IntoV
 
     view! {
         class=style,
-            <span 
-                class="score" 
+            <span
+                class="score"
                 style=format!("grid-row: {};", idx + 1)
                 class:won=won
                 class:lost=lost
