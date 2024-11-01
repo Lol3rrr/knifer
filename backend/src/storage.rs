@@ -14,7 +14,13 @@ pub trait DemoStorage: Send + Sync {
         's: 'f,
         'own: 'f;
 
-    fn load<'f, 'own>(&'own self, user_id: String, demo_id: String) -> futures::future::BoxFuture<'f, Result<crate::analysis::AnalysisData, String>> where 'own: 'f;
+    fn load<'f, 'own>(
+        &'own self,
+        user_id: String,
+        demo_id: String,
+    ) -> futures::future::BoxFuture<'f, Result<crate::analysis::AnalysisData, String>>
+    where
+        'own: 'f;
 }
 
 pub struct FileStorage {
@@ -46,7 +52,8 @@ impl DemoStorage for FileStorage {
         stream: futures_util::stream::BoxStream<'s, axum::body::Bytes>,
     ) -> futures::future::BoxFuture<'f, Result<(), String>>
     where
-        's: 'f,'own: 'f
+        's: 'f,
+        'own: 'f,
     {
         let path = self.folder.clone();
 
@@ -79,15 +86,26 @@ impl DemoStorage for FileStorage {
         .boxed()
     }
 
-    fn load<'f, 'own>(&'own self, user_id: String, demo_id: String) -> futures::future::BoxFuture<'f, Result<crate::analysis::AnalysisData, String>> where 'own: 'f {
+    fn load<'f, 'own>(
+        &'own self,
+        user_id: String,
+        demo_id: String,
+    ) -> futures::future::BoxFuture<'f, Result<crate::analysis::AnalysisData, String>>
+    where
+        'own: 'f,
+    {
         async move {
-            let user_folder = std::path::Path::new(self.folder.as_path()).join(format!("{}/", user_id));
+            let user_folder =
+                std::path::Path::new(self.folder.as_path()).join(format!("{}/", user_id));
             let demo_file_path = user_folder.join(format!("{}.dem", demo_id));
             let file = std::fs::File::open(demo_file_path.as_path()).unwrap();
             let mmap = unsafe { memmap2::MmapOptions::new().map(&file).unwrap() };
-            
-            Ok(crate::analysis::AnalysisData::MemMapped(std::sync::Arc::new(mmap)))
-        }.boxed()
+
+            Ok(crate::analysis::AnalysisData::MemMapped(
+                std::sync::Arc::new(mmap),
+            ))
+        }
+        .boxed()
     }
 }
 
@@ -96,7 +114,11 @@ pub struct S3Storage {
 }
 
 impl S3Storage {
-    pub fn new(bucket_name: &str, region: s3::region::Region, credentials: s3::creds::Credentials) -> Self {
+    pub fn new(
+        bucket_name: &str,
+        region: s3::region::Region,
+        credentials: s3::creds::Credentials,
+    ) -> Self {
         let mut bucket = s3::bucket::Bucket::new(bucket_name, region, credentials).unwrap();
         bucket.set_path_style();
 
@@ -120,9 +142,10 @@ impl DemoStorage for S3Storage {
         stream: futures_util::stream::BoxStream<'s, axum::body::Bytes>,
     ) -> futures::future::BoxFuture<'f, Result<(), String>>
     where
-        's: 'f, 'own: 'f {
+        's: 'f,
+        'own: 'f,
+    {
         async move {
-
             let path = std::path::PathBuf::new().join(user_id).join(demo_id);
             let path = path.to_str().unwrap();
 
@@ -133,20 +156,34 @@ impl DemoStorage for S3Storage {
 
             self.bucket.list(String::new(), None).await.unwrap();
 
-            self.bucket.put_object_stream(&mut body_reader, path).await.unwrap();
+            self.bucket
+                .put_object_stream(&mut body_reader, path)
+                .await
+                .unwrap();
 
             Ok(())
-        }.boxed()
+        }
+        .boxed()
     }
 
-    fn load<'f, 'own>(&'own self, user_id: String, demo_id: String) -> futures::future::BoxFuture<'f, Result<crate::analysis::AnalysisData, String>> where 'own: 'f {
+    fn load<'f, 'own>(
+        &'own self,
+        user_id: String,
+        demo_id: String,
+    ) -> futures::future::BoxFuture<'f, Result<crate::analysis::AnalysisData, String>>
+    where
+        'own: 'f,
+    {
         async move {
             let path = std::path::PathBuf::new().join(user_id).join(demo_id);
             let path = path.to_str().unwrap();
 
             let resp = self.bucket.get_object(path).await.unwrap();
 
-            Ok(crate::analysis::AnalysisData::Preloaded(resp.to_vec().into()))
-        }.boxed()
+            Ok(crate::analysis::AnalysisData::Preloaded(
+                resp.to_vec().into(),
+            ))
+        }
+        .boxed()
     }
 }

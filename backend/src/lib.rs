@@ -70,7 +70,6 @@ pub async fn run_analysis(storage: Box<dyn crate::storage::DemoStorage>) {
     use diesel::prelude::*;
     use diesel_async::RunQueryDsl;
 
-
     loop {
         let mut db_con = db_connection().await;
 

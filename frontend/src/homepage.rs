@@ -25,7 +25,9 @@ pub fn homepage() -> impl leptos::IntoView {
 }
 
 #[leptos::component]
-fn demo_list(demos: impl SignalGet<Value = Option<Vec<common::BaseDemoInfo>>> + 'static) -> impl leptos::IntoView {
+fn demo_list(
+    demos: impl SignalGet<Value = Option<Vec<common::BaseDemoInfo>>> + 'static,
+) -> impl leptos::IntoView {
     let style = stylers::style! {
         "DemoList",
         .list {

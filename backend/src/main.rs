@@ -51,24 +51,30 @@ async fn main() {
     let mut component_set = tokio::task::JoinSet::new();
 
     let storage: Box<dyn backend::storage::DemoStorage> = match args.storage {
-            CliStorage::File => Box::new(backend::storage::FileStorage::new(
-                args.upload_folder.clone(),
-            )),
-            CliStorage::S3 => {
-                let credentials = s3::creds::Credentials::from_env_specific(
-                    Some("S3_ACCESS_KEY"),
-                    Some("S3_SECRET_KEY"),
-                    None,
-                    None
-                ).unwrap();
+        CliStorage::File => Box::new(backend::storage::FileStorage::new(
+            args.upload_folder.clone(),
+        )),
+        CliStorage::S3 => {
+            let credentials = s3::creds::Credentials::from_env_specific(
+                Some("S3_ACCESS_KEY"),
+                Some("S3_SECRET_KEY"),
+                None,
+                None,
+            )
+            .unwrap();
 
-                let region = s3::Region::from_env("S3_REGION", Some("S3_ENDPOINT")).unwrap();
+            let region = s3::Region::from_env("S3_REGION", Some("S3_ENDPOINT")).unwrap();
 
-                let bucket = std::env::var("S3_BUCKET").expect("Need 'S3_BUCKET' for using s3 storage backend");
-                
-                Box::new(backend::storage::S3Storage::new(&bucket, region, credentials))
-            },
-        };
+            let bucket =
+                std::env::var("S3_BUCKET").expect("Need 'S3_BUCKET' for using s3 storage backend");
+
+            Box::new(backend::storage::S3Storage::new(
+                &bucket,
+                region,
+                credentials,
+            ))
+        }
+    };
 
     tracing::info!("Starting modules");
     if args.api {
