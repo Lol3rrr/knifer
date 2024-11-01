@@ -16,11 +16,18 @@ pub fn homepage(get_notification: ReadSignal<u8>) -> impl leptos::IntoView {
         },
     );
 
+    let pending_display = move || demo_data.get().map(|d| d.pending).filter(|p| p.len() > 0).map(|pending| {
+        view! {
+            <p>{pending.len()} demos are pending/waiting for analysis</p>
+        }
+    });
+
     view! {
         <div>
             <div>
                 <h2>Demos</h2>
             </div>
+            { pending_display }
             <DemoList demos=demo_data />
         </div>
     }
@@ -90,11 +97,33 @@ fn demo_list_entry(demo: common::BaseDemoInfo, idx: usize) -> impl leptos::IntoV
             grid-template-columns: auto;
             grid-template-rows: auto auto;
         }
+
+        .won {
+            color: #00aa00;
+        }
+        .lost {
+            color: #aa0000;
+        }
     };
+
+    let (player_score, enemy_score) = if demo.player_team == 2 {
+        (demo.team2_score, demo.team3_score)
+    } else {
+        (demo.team3_score, demo.team2_score)
+    };
+    let won = move || player_score > enemy_score;
+    let lost = move || enemy_score > player_score;
+    let tie = move || player_score == enemy_score;
 
     view! {
         class=style,
-            <span class="score" style=format!("grid-row: {};", idx + 1)>{demo.team2_score}:{demo.team3_score}</span>
+            <span 
+                class="score" 
+                style=format!("grid-row: {};", idx + 1)
+                class:won=won
+                class:lost=lost
+                class:tie=tie
+            >{demo.team2_score}:{demo.team3_score}</span>
             <div class="date" style=format!("grid-row: {};", idx + 1)>
                 <span>{demo.uploaded_at.format("%Y-%m-%d").to_string()}</span>
                 <span>{demo.uploaded_at.format("%H-%M-%S").to_string()}</span>

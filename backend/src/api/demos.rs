@@ -44,12 +44,17 @@ async fn list(
             crate::schema::demo_teams::table
                 .on(crate::schema::demos::dsl::demo_id.eq(crate::schema::demo_teams::dsl::demo_id)),
         )
+        .inner_join(
+            crate::schema::demo_players::table
+                .on(crate::schema::demos::dsl::demo_id.eq(crate::schema::demo_players::dsl::demo_id))
+        )
         .select((
             crate::models::Demo::as_select(),
             crate::models::DemoInfo::as_select(),
             crate::models::DemoTeam::as_select(),
+            crate::models::DemoPlayer::as_select(),
         ))
-        .filter(crate::schema::demos::dsl::steam_id.eq(steam_id.to_string()));
+        .filter(crate::schema::demos::dsl::steam_id.eq(steam_id.to_string()).and(crate::schema::demo_players::dsl::steam_id.eq(steam_id.to_string())));
     let pending_query = crate::schema::demos::dsl::demos
         .inner_join(crate::schema::processing_status::table.on(
             crate::schema::demos::dsl::demo_id.eq(crate::schema::processing_status::dsl::demo_id),
@@ -72,6 +77,7 @@ async fn list(
                     crate::models::Demo,
                     crate::models::DemoInfo,
                     crate::models::DemoTeam,
+                    crate::models::DemoPlayer,
                 )> = done_query.load(con).await?;
 
                 let pending_results: Vec<(crate::models::Demo)> = pending_query.load(con).await?;
@@ -83,7 +89,7 @@ async fn list(
         .unwrap();
 
     let mut demos = std::collections::HashMap::new();
-    for (demo, info, team) in results.into_iter() {
+    for (demo, info, team, player) in results.into_iter() {
         let entry = demos
             .entry(demo.demo_id.clone())
             .or_insert(common::BaseDemoInfo {
@@ -92,6 +98,7 @@ async fn list(
                 uploaded_at: demo.uploaded_at,
                 team2_score: 0,
                 team3_score: 0,
+                player_team: player.team,
             });
 
         if team.team == 2 {

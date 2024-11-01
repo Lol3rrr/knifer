@@ -11,6 +11,7 @@ pub struct BaseDemoInfo {
     pub uploaded_at: chrono::naive::NaiveDateTime,
     pub team2_score: i16,
     pub team3_score: i16,
+    pub player_team: i16,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
