@@ -89,13 +89,13 @@ async fn upload(
     State(state): State<Arc<DemoState>>,
     session: crate::UserSession,
     mut form: axum::extract::Multipart,
-) -> Result<axum::response::Redirect, (axum::http::StatusCode, String)> {
+) -> Result<(), (axum::http::StatusCode, String)> {
     let steam_id = session
         .data()
         .steam_id
         .ok_or_else(|| (axum::http::StatusCode::UNAUTHORIZED, "Not logged in".into()))?;
 
-    tracing::info!("Upload for Session: {:?}", steam_id);
+    tracing::info!("Starting upload for Session: {:?}", steam_id);
 
     let file_field = loop {
         let field = match form.next_field().await {
@@ -124,14 +124,19 @@ async fn upload(
         .upload(
             steam_id.to_string(),
             demo_id.clone(),
-            file_field.filter_map(|b| async { b.ok() }).boxed(),
+            file_field
+                .filter_map(|b| async { b.ok() })
+                .inspect(|b| {
+                    tracing::debug!("Received {} bytes", b.len());
+                })
+                .boxed(),
         )
         .await
         .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e))?;
 
-    let mut db_con = crate::db_connection().await;
+    tracing::info!("Saved to storage");
 
-    // Turn all of this into a single transaction
+    let mut db_con = crate::db_connection().await;
 
     let db_trans_result = db_con
         .build_transaction()
@@ -168,7 +173,9 @@ async fn upload(
         tracing::error!("Inserting data into db: {:?}", e);
     }
 
-    Ok(axum::response::Redirect::to("/"))
+    tracing::info!("Done with upload");
+
+    Ok(())
 }
 
 #[tracing::instrument(skip(session))]
