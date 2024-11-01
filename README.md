@@ -7,6 +7,13 @@ A self-hosted demo analysis tool
 - `STEAM_API_KEY`
 - `BASE_URL`
 
+If using the 's3' storage backend
+- `S3_ACCESS_KEY`
+- `S3_SECRET_KEY`
+- `S3_REGION`
+- `S3_ENDPOINT`
+- `S3_BUCKET`
+
 ### Needed external Software
 - `postgresql`
 

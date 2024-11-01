@@ -7,10 +7,20 @@ async fn run_migrations(connection: &mut diesel_async::AsyncPgConnection) {
     MIGRATIONS.run_pending_migrations(connection).await.unwrap();
 }
 
+#[derive(clap::ValueEnum, Clone, Default, Debug)]
+enum CliStorage {
+    #[default]
+    File,
+    S3,
+}
+
 #[derive(clap::Parser)]
 struct CliArgs {
     #[clap(long = "upload-folder", default_value = "uploads/")]
     upload_folder: std::path::PathBuf,
+
+    #[clap(long = "storage", default_value = "file")]
+    storage: CliStorage,
 
     #[clap(long = "api", default_value_t = true)]
     api: bool,
@@ -40,6 +50,26 @@ async fn main() {
 
     let mut component_set = tokio::task::JoinSet::new();
 
+    let storage: Box<dyn backend::storage::DemoStorage> = match args.storage {
+            CliStorage::File => Box::new(backend::storage::FileStorage::new(
+                args.upload_folder.clone(),
+            )),
+            CliStorage::S3 => {
+                let credentials = s3::creds::Credentials::from_env_specific(
+                    Some("S3_ACCESS_KEY"),
+                    Some("S3_SECRET_KEY"),
+                    None,
+                    None
+                ).unwrap();
+
+                let region = s3::Region::from_env("S3_REGION", Some("S3_ENDPOINT")).unwrap();
+
+                let bucket = std::env::var("S3_BUCKET").expect("Need 'S3_BUCKET' for using s3 storage backend");
+                
+                Box::new(backend::storage::S3Storage::new(&bucket, region, credentials))
+            },
+        };
+
     tracing::info!("Starting modules");
     if args.api {
         tracing::info!("Enabled API module");
@@ -52,12 +82,12 @@ async fn main() {
             }
         };
 
-        component_set.spawn(backend::run_api(args.upload_folder.clone(), steam_api_key));
+        component_set.spawn(backend::run_api(storage.duplicate(), steam_api_key));
     }
     if args.analysis {
         tracing::info!("Enabled Analysis module");
 
-        component_set.spawn(backend::run_analysis(args.upload_folder.clone()));
+        component_set.spawn(backend::run_analysis(storage));
     }
     tracing::info!("Started modules");
 

@@ -6,13 +6,10 @@ use diesel_async::RunQueryDsl;
 use std::sync::Arc;
 
 struct DemoState {
-    upload_folder: std::path::PathBuf,
+    storage: Box<dyn crate::storage::DemoStorage + Send + Sync>,
 }
 
-pub fn router<P>(upload_folder: P) -> axum::Router
-where
-    P: Into<std::path::PathBuf>,
-{
+pub fn router(storage: Box<dyn crate::storage::DemoStorage>) -> axum::Router {
     axum::Router::new()
         .route("/list", axum::routing::get(list))
         .route(
@@ -25,9 +22,7 @@ where
         .route("/:id/analysis/scoreboard", axum::routing::get(scoreboard))
         .route("/:id/analysis/perround", axum::routing::get(perround))
         .route("/:id/analysis/heatmap", axum::routing::get(heatmap))
-        .with_state(Arc::new(DemoState {
-            upload_folder: upload_folder.into(),
-        }))
+        .with_state(Arc::new(DemoState { storage }))
 }
 
 #[tracing::instrument(skip(session))]
@@ -94,11 +89,11 @@ async fn upload(
     State(state): State<Arc<DemoState>>,
     session: crate::UserSession,
     mut form: axum::extract::Multipart,
-) -> Result<axum::response::Redirect, (axum::http::StatusCode, &'static str)> {
+) -> Result<axum::response::Redirect, (axum::http::StatusCode, String)> {
     let steam_id = session
         .data()
         .steam_id
-        .ok_or_else(|| (axum::http::StatusCode::UNAUTHORIZED, "Not logged in"))?;
+        .ok_or_else(|| (axum::http::StatusCode::UNAUTHORIZED, "Not logged in".into()))?;
 
     tracing::info!("Upload for Session: {:?}", steam_id);
 
@@ -107,11 +102,11 @@ async fn upload(
             Ok(Some(f)) => f,
             Ok(None) => {
                 tracing::error!("");
-                return Err((axum::http::StatusCode::BAD_REQUEST, "Missing Data"));
+                return Err((axum::http::StatusCode::BAD_REQUEST, "Missing Data".into()));
             }
             Err(e) => {
                 tracing::error!("");
-                return Err((axum::http::StatusCode::BAD_REQUEST, ""));
+                return Err((axum::http::StatusCode::BAD_REQUEST, "".into()));
             }
         };
 
@@ -123,16 +118,16 @@ async fn upload(
     let raw_demo_id = uuid::Uuid::now_v7();
     let demo_id = raw_demo_id.to_string();
 
-    let user_folder = std::path::Path::new(&state.upload_folder).join(format!("{}/", steam_id));
-    if !tokio::fs::try_exists(&user_folder).await.unwrap_or(false) {
-        tokio::fs::create_dir_all(&user_folder).await.unwrap();
-    }
-
-    let demo_file_path = user_folder.join(format!("{}.dem", demo_id));
-
-    super::stream_to_file(demo_file_path, file_field)
+    use futures::stream::StreamExt;
+    state
+        .storage
+        .upload(
+            steam_id.to_string(),
+            demo_id.clone(),
+            file_field.filter_map(|b| async { b.ok() }).boxed(),
+        )
         .await
-        .unwrap();
+        .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e))?;
 
     let mut db_con = crate::db_connection().await;
 

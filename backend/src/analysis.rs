@@ -6,30 +6,38 @@ pub mod heatmap;
 pub mod perround;
 
 #[derive(Debug, Clone)]
+pub enum AnalysisData {
+    MemMapped(std::sync::Arc<memmap2::Mmap>),
+    Preloaded(std::sync::Arc<[u8]>),
+}
+
+#[derive(Debug, Clone)]
 pub struct AnalysisInput {
     pub steamid: String,
     pub demoid: String,
-    data: std::sync::Arc<memmap2::Mmap>,
+    data: AnalysisData,
 }
 
 impl AnalysisInput {
     pub async fn load(
         steamid: String,
         demoid: String,
-        path: impl AsRef<std::path::Path>,
+        storage: &dyn crate::storage::DemoStorage,
     ) -> Result<Self, ()> {
-        let file = std::fs::File::open(path.as_ref()).unwrap();
-        let mmap = unsafe { memmap2::MmapOptions::new().map(&file).unwrap() };
+        let data = storage.load(steamid.clone(), demoid.clone()).await.unwrap();
 
         Ok(Self {
             steamid,
             demoid,
-            data: std::sync::Arc::new(mmap),
+            data,
         })
     }
 
     pub fn data(&self) -> &[u8] {
-        &self.data
+        match &self.data {
+            AnalysisData::MemMapped(v) => &v,
+            AnalysisData::Preloaded(v) => &v,
+        }
     }
 }
 
@@ -75,7 +83,7 @@ impl<AE> From<diesel::result::Error> for TaskError<AE> {
 }
 
 pub async fn poll_next_task<A, AE>(
-    upload_folder: impl Into<std::path::PathBuf>,
+    storage: Box<dyn crate::storage::DemoStorage>,
     db_con: &mut diesel_async::pg::AsyncPgConnection,
     action: A,
 ) -> Result<(), TaskError<AE>>
@@ -96,10 +104,8 @@ where
         .for_update()
         .skip_locked();
 
-    let upload_folder: std::path::PathBuf = upload_folder.into();
-
     loop {
-        let upload_folder = upload_folder.clone();
+        let storage = storage.duplicate();
         let action = action.clone();
 
         let result = db_con
@@ -115,9 +121,7 @@ where
                     let input = AnalysisInput::load(
                         task.steam_id.clone(),
                         task.demo_id.clone(),
-                        upload_folder
-                            .join(&task.steam_id)
-                            .join(format!("{}.dem", task.demo_id)),
+                        storage.as_ref(),
                     )
                     .await
                     .unwrap();

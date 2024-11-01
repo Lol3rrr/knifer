@@ -153,7 +153,7 @@ pub struct RouterConfig {
     pub steam_api_key: String,
     pub steam_callback_base_url: String,
     pub steam_callback_path: String,
-    pub upload_dir: std::path::PathBuf,
+    pub storage: Box<dyn crate::storage::DemoStorage>,
 }
 
 pub fn router(config: RouterConfig) -> axum::Router {
@@ -166,7 +166,7 @@ pub fn router(config: RouterConfig) -> axum::Router {
                 config.steam_api_key,
             ),
         )
-        .nest("/demos/", demos::router(config.upload_dir))
+        .nest("/demos/", demos::router(config.storage))
         .nest("/user/", user::router())
 }
 

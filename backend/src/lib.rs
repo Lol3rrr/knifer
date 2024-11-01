@@ -21,23 +21,19 @@ pub async fn db_connection() -> diesel_async::AsyncPgConnection {
 pub mod api;
 pub mod steam_api;
 
-#[tracing::instrument(skip(upload_folder, steam_api_key))]
+pub mod storage;
+
+#[tracing::instrument(skip(storage, steam_api_key))]
 pub async fn run_api(
-    upload_folder: impl Into<std::path::PathBuf>,
+    storage: Box<dyn crate::storage::DemoStorage>,
     steam_api_key: impl Into<String>,
 ) {
-    let upload_folder: std::path::PathBuf = upload_folder.into();
-
     let session_store = crate::diesel_sessionstore::DieselStore::new();
     let session_layer = tower_sessions::SessionManagerLayer::new(session_store)
         .with_secure(false)
         .with_expiry(tower_sessions::Expiry::OnInactivity(time::Duration::hours(
             48,
         )));
-
-    if !tokio::fs::try_exists(&upload_folder).await.unwrap_or(false) {
-        tokio::fs::create_dir_all(&upload_folder).await.unwrap();
-    }
 
     let serve_dir = option_env!("FRONTEND_DIST_DIR").unwrap_or("../frontend/dist/");
     tracing::debug!("Serving static files from {:?}", serve_dir);
@@ -53,7 +49,7 @@ pub async fn run_api(
                 steam_api_key: steam_api_key.into(),
                 steam_callback_base_url,
                 steam_callback_path: "/api/steam/callback".into(),
-                upload_dir: upload_folder.clone(),
+                storage,
             }),
         )
         .layer(session_layer)
@@ -69,22 +65,25 @@ pub async fn run_api(
     axum::serve(listener, router).await.unwrap();
 }
 
-#[tracing::instrument(skip(upload_folder))]
-pub async fn run_analysis(upload_folder: impl Into<std::path::PathBuf>) {
+#[tracing::instrument(skip(storage))]
+pub async fn run_analysis(storage: Box<dyn crate::storage::DemoStorage>) {
     use diesel::prelude::*;
     use diesel_async::RunQueryDsl;
 
-    let upload_folder: std::path::PathBuf = upload_folder.into();
 
     loop {
         let mut db_con = db_connection().await;
 
         let res = crate::analysis::poll_next_task(
-            &upload_folder,
+            storage.duplicate(),
             &mut db_con,
             move |input: analysis::AnalysisInput, db_con: &mut diesel_async::AsyncPgConnection| {
                 Box::pin(async move {
                     let demo_id = input.demoid.clone();
+
+                    let _span = tracing::info_span!("Analysis", demo=?demo_id);
+
+                    tracing::info!("Starting analysis");
 
                     let mut store_result_fns = Vec::new();
                     for analysis in analysis::ANALYSIS_METHODS.iter().map(|a| a.clone()) {
@@ -118,6 +117,8 @@ pub async fn run_analysis(upload_folder: impl Into<std::path::PathBuf>) {
                         store_fn(db_con).await.map_err(|e| ())?;
                     }
                     update_process_info.execute(db_con).await.map_err(|e| ())?;
+
+                    tracing::info!("Completed analysis");
 
                     Ok::<(), ()>(())
                 })
