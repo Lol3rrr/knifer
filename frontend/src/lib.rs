@@ -19,6 +19,7 @@ pub enum DemoUploadStatus {
 pub fn upload_demo(
     shown: ReadSignal<DemoUploadStatus>,
     update_shown: WriteSignal<DemoUploadStatus>,
+    reload_demos: WriteSignal<u8>,
 ) -> impl leptos::IntoView {
     use leptos_router::Form;
 
@@ -62,8 +63,10 @@ pub fn upload_demo(
         // Remove the Upload popup
         update_shown.set(DemoUploadStatus::Hidden);
 
-        // TOOD
         // Reload the demo list
+        reload_demos.update(|v| {
+            *v = v.wrapping_add(1);
+        });
     });
 
     let on_submit: std::rc::Rc<dyn Fn(&leptos::web_sys::FormData)> = std::rc::Rc::new(move |_| {

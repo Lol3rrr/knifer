@@ -1,15 +1,17 @@
 use leptos::*;
 
 #[leptos::component]
-pub fn homepage() -> impl leptos::IntoView {
+pub fn homepage(get_notification: ReadSignal<u8>) -> impl leptos::IntoView {
     let demo_data = create_resource(
-        || (),
+        move || {
+            get_notification.get()
+        },
         |_| async move {
             let res = reqwasm::http::Request::get("/api/demos/list")
                 .send()
                 .await
                 .unwrap();
-            let demos: Vec<common::BaseDemoInfo> = res.json().await.unwrap();
+            let demos: common::DemoList = res.json().await.unwrap();
             demos
         },
     );
@@ -26,7 +28,7 @@ pub fn homepage() -> impl leptos::IntoView {
 
 #[leptos::component]
 fn demo_list(
-    demos: impl SignalGet<Value = Option<Vec<common::BaseDemoInfo>>> + 'static,
+    demos: impl SignalGet<Value = Option<common::DemoList>> + 'static,
 ) -> impl leptos::IntoView {
     let style = stylers::style! {
         "DemoList",
@@ -45,7 +47,7 @@ fn demo_list(
             <span>Date</span>
             <span>Map</span>
 
-            { move || demos.get().unwrap_or_default().into_iter().enumerate().map(|(i, demo)| view! { <DemoListEntry demo idx=i+1 /> }).collect::<Vec<_>>() }
+            { move || demos.get().map(|d| d.done).unwrap_or_default().into_iter().enumerate().map(|(i, demo)| view! { <DemoListEntry demo idx=i+1 /> }).collect::<Vec<_>>() }
         </div>
     }
 }

@@ -1,4 +1,10 @@
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct DemoList {
+    pub done: Vec<BaseDemoInfo>,
+    pub pending: Vec<()>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct BaseDemoInfo {
     pub id: String,
     pub map: String,

@@ -28,14 +28,14 @@ pub fn router(storage: Box<dyn crate::storage::DemoStorage>) -> axum::Router {
 #[tracing::instrument(skip(session))]
 async fn list(
     session: UserSession,
-) -> Result<axum::response::Json<Vec<common::BaseDemoInfo>>, axum::http::StatusCode> {
+) -> Result<axum::response::Json<common::DemoList>, axum::http::StatusCode> {
     let steam_id = session
         .data()
         .steam_id
         .ok_or_else(|| axum::http::StatusCode::UNAUTHORIZED)?;
     tracing::info!("SteamID: {:?}", steam_id);
 
-    let query = crate::schema::demos::dsl::demos
+    let done_query = crate::schema::demos::dsl::demos
         .inner_join(
             crate::schema::demo_info::table
                 .on(crate::schema::demos::dsl::demo_id.eq(crate::schema::demo_info::dsl::demo_id)),
@@ -50,11 +50,37 @@ async fn list(
             crate::models::DemoTeam::as_select(),
         ))
         .filter(crate::schema::demos::dsl::steam_id.eq(steam_id.to_string()));
-    let results: Vec<(
-        crate::models::Demo,
-        crate::models::DemoInfo,
-        crate::models::DemoTeam,
-    )> = query.load(&mut crate::db_connection().await).await.unwrap();
+    let pending_query = crate::schema::demos::dsl::demos
+        .inner_join(crate::schema::processing_status::table.on(
+            crate::schema::demos::dsl::demo_id.eq(crate::schema::processing_status::dsl::demo_id),
+        ))
+        .select((crate::models::Demo::as_select()))
+        .filter(
+            crate::schema::demos::dsl::steam_id
+                .eq(steam_id.to_string())
+                .and(crate::schema::processing_status::dsl::info.ne(1)),
+        );
+
+    let mut db_con = crate::db_connection().await;
+
+    let (results, pending) = db_con
+        .build_transaction()
+        .read_only()
+        .run::<_, diesel::result::Error, _>(|con| {
+            Box::pin(async move {
+                let done_results: Vec<(
+                    crate::models::Demo,
+                    crate::models::DemoInfo,
+                    crate::models::DemoTeam,
+                )> = done_query.load(con).await?;
+
+                let pending_results: Vec<(crate::models::Demo)> = pending_query.load(con).await?;
+
+                Ok((done_results, pending_results))
+            })
+        })
+        .await
+        .unwrap();
 
     let mut demos = std::collections::HashMap::new();
     for (demo, info, team) in results.into_iter() {
@@ -77,11 +103,13 @@ async fn list(
         }
     }
 
-    // Sort this
-    let mut output = demos.into_values().collect::<Vec<_>>();
-    output.sort_unstable_by_key(|d| std::cmp::Reverse(d.uploaded_at));
+    let mut done_demos = demos.into_values().collect::<Vec<_>>();
+    done_demos.sort_unstable_by_key(|d| std::cmp::Reverse(d.uploaded_at));
 
-    Ok(axum::response::Json(output))
+    Ok(axum::response::Json(common::DemoList {
+        done: done_demos,
+        pending: pending.into_iter().map(|d| ()).collect(),
+    }))
 }
 
 #[tracing::instrument(skip(state, session, form))]
