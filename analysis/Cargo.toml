@@ -17,3 +17,9 @@ phf = { version = "0.11" }
 [dev-dependencies]
 pretty_assertions = { version = "1.4" }
 tracing-test = { version = "0.2", features = ["no-env-filter"] }
+
+divan = "0.1.15"
+
+[[bench]]
+name = "analysis"
+harness = false
