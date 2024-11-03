@@ -47,7 +47,16 @@ impl Analysis for PerRoundAnalysis {
             Box::pin(async move {
                 let query = diesel::dsl::insert_into(crate::schema::demo_round::dsl::demo_round)
                     .values(&values)
-                    .on_conflict_do_nothing();
+                    .on_conflict((
+                        crate::schema::demo_round::dsl::demo_id,
+                        crate::schema::demo_round::dsl::round_number,
+                    ))
+                    .do_update()
+                    .set(
+                        crate::schema::demo_round::dsl::events.eq(diesel::upsert::excluded(
+                            crate::schema::demo_round::dsl::events,
+                        )),
+                    );
 
                 query.execute(connection).await?;
 

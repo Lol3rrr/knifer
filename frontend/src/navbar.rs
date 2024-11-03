@@ -31,9 +31,7 @@ fn steam_login(height: &'static str, width: &'static str) -> impl leptos::IntoVi
     }
     };
 
-    view! {
-        { tmp }
-    }
+    tmp
 }
 
 #[leptos::component]

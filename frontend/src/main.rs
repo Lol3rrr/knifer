@@ -22,7 +22,7 @@ fn main() {
                         <Route path="/demo/:id" view=Demo>
                             <Route path="scoreboard" view=frontend::demo::scoreboard::Scoreboard>
                                 <Route path="general" view=frontend::demo::scoreboard::general::General />
-                                <Route path="utility" view=frontend::demo::scoreboard::utility::Utility />                    
+                                <Route path="utility" view=frontend::demo::scoreboard::utility::Utility />
                                 <Route path="" view=frontend::demo::scoreboard::general::General />
                             </Route>
                             <Route path="perround" view=frontend::demo::perround::PerRound />

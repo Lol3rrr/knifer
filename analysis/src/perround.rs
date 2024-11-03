@@ -60,7 +60,16 @@ pub struct Round {
 pub enum RoundEvent {
     BombPlanted,
     BombDefused,
-    Kill { attacker: u64, died: u64 },
+    Kill {
+        attacker: u64,
+        died: u64,
+        #[serde(default)]
+        weapon: Option<String>,
+        #[serde(default)]
+        headshot: bool,
+        #[serde(default)]
+        noscope: bool,
+    },
 }
 
 #[derive(Debug)]
@@ -138,7 +147,7 @@ pub fn parse(buf: &[u8]) -> Result<PerRound, ()> {
                     };
                 }
 
-                let event = match ge.as_ref() {
+                let event = match *ge {
                     csdemo::game_event::GameEvent::BombPlanted(planted) => RoundEvent::BombPlanted,
                     csdemo::game_event::GameEvent::BombDefused(defused) => RoundEvent::BombDefused,
                     csdemo::game_event::GameEvent::PlayerDeath(death) => {
@@ -157,6 +166,9 @@ pub fn parse(buf: &[u8]) -> Result<PerRound, ()> {
                         RoundEvent::Kill {
                             attacker: attacker_player.xuid,
                             died: died_player.xuid,
+                            weapon: death.weapon,
+                            noscope: death.noscope.unwrap_or(false),
+                            headshot: death.headshot.unwrap_or(false),
                         }
                     }
                     _ => continue,

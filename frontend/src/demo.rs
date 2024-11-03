@@ -42,13 +42,6 @@ pub fn demo() -> impl leptos::IntoView {
         None => String::new(),
     };
 
-    let selected_tab = move || {
-        let loc = leptos_router::use_location();
-        let loc_path = loc.pathname.get();
-        let trailing = loc_path.split('/').last();
-        trailing.unwrap_or("/").to_owned()
-    };
-
     let style = stylers::style! {
         "Demo",
         .analysis_bar {
@@ -87,13 +80,27 @@ pub fn demo() -> impl leptos::IntoView {
 }
 
 #[leptos::component]
-pub fn tab_bar<P>(prefix: P, parts: &'static [(&'static str, &'static str)]) -> impl leptos::IntoView where P: Fn() -> String + Copy + 'static {
+pub fn tab_bar<P>(
+    prefix: P,
+    parts: &'static [(&'static str, &'static str)],
+) -> impl leptos::IntoView
+where
+    P: Fn() -> String + Copy + 'static,
+{
     let selected_tab = move || {
         let prefix = prefix();
         let loc = leptos_router::use_location();
         let loc_path = loc.pathname.get();
-        let trailing = loc_path.strip_prefix(&prefix).unwrap_or(&loc_path).split('/').filter(|l| !l.is_empty()).next();
-        trailing.or(parts.first().map(|p| p.0)).unwrap_or("").to_owned()
+        let trailing = loc_path
+            .strip_prefix(&prefix)
+            .unwrap_or(&loc_path)
+            .split('/')
+            .filter(|l| !l.is_empty())
+            .next();
+        trailing
+            .or(parts.first().map(|p| p.0))
+            .unwrap_or("")
+            .to_owned()
     };
 
     let style = stylers::style! {
@@ -122,7 +129,8 @@ pub fn tab_bar<P>(prefix: P, parts: &'static [(&'static str, &'static str)]) -> 
         }
     };
 
-    let tabs = move || parts.into_iter().map(|(routename, name)| {
+    let tabs = move || {
+        parts.into_iter().map(|(routename, name)| {
         view! {class=style,
             <div class="analysis_selector" class:current=move || selected_tab() == routename.to_string()>
                 <A href=routename.to_string()>
@@ -130,7 +138,8 @@ pub fn tab_bar<P>(prefix: P, parts: &'static [(&'static str, &'static str)]) -> 
                 </A>
             </div>
         }
-    }).collect::<Vec<_>>();
+    }).collect::<Vec<_>>()
+    };
 
     view! {class = style,
         <div class="analysis_bar" style=format!("--rows: {}", parts.len())>

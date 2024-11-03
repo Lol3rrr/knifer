@@ -79,24 +79,33 @@ pub fn per_round() -> impl leptos::IntoView {
 
         match (current_round, teams) {
             (Some(round), Some(teams)) => {
-                round.events.iter().map(|event| {
+                round.events.into_iter().map(|event| {
                     match event {
                         common::demo_analysis::RoundEvent::BombPlanted => view! { <li>Bomb has been planted</li> }.into_view(),
                         common::demo_analysis::RoundEvent::BombDefused => view! { <li>Bomb has been defused</li> }.into_view(),
-                        common::demo_analysis::RoundEvent::Killed { attacker, died } => {
-                            let mut attacker_t = teams.iter().find(|t| t.players.contains(attacker)).map(|t| t.name == "TERRORIST").unwrap_or(false);
-                            let mut died_t = teams.iter().find(|t| t.players.contains(died)).map(|t| t.name == "TERRORIST").unwrap_or(false);
+                        common::demo_analysis::RoundEvent::Killed { attacker, died, weapon, headshot, noscope } => {
+                            let mut attacker_t = teams.iter().find(|t| t.players.contains(&attacker)).map(|t| t.name == "TERRORIST").unwrap_or(false);
+                            let mut died_t = teams.iter().find(|t| t.players.contains(&died)).map(|t| t.name == "TERRORIST").unwrap_or(false);
 
                             if (12..27).contains(&round_index) {
                                 attacker_t = !attacker_t;
                                 died_t = !died_t;
                             }
 
+                            let weapon_display = move || {
+                                let parts = weapon.as_ref().into_iter().map(|w| w.as_str())
+                                    .chain(headshot.then_some("Headshot").into_iter())
+                                    .chain(noscope.then_some("Noscope").into_iter());
+
+                                format!("(using {})", parts.collect::<Vec<_>>().join(","))
+                            };
+
                             view! {
                                 class=style,
-                                <li>{"'"}
-                                    <span class:t_player=move || attacker_t class:ct_player=move || !attacker_t>{ attacker }</span>{"'"} killed {"'"}
-                                    <span class:t_player=move || died_t class:ct_player=move || !died_t>{ died }</span>{"'"}
+                                <li>
+                                    {"'"}<span class:t_player=move || attacker_t class:ct_player=move || !attacker_t>{ attacker }</span>{"'"}
+                                    killed { weapon_display }
+                                    {"'"}<span class:t_player=move || died_t class:ct_player=move || !died_t>{ died }</span>{"'"}
                                 </li>
                             }.into_view()
                         },

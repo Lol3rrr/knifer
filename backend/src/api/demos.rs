@@ -505,7 +505,13 @@ async fn perround(
                 analysis::perround::RoundEvent::BombDefused => {
                     common::demo_analysis::RoundEvent::BombDefused
                 }
-                analysis::perround::RoundEvent::Kill { attacker, died } => {
+                analysis::perround::RoundEvent::Kill {
+                    attacker,
+                    died,
+                    weapon,
+                    noscope,
+                    headshot,
+                } => {
                     let attacker_name = players
                         .iter()
                         .find(|p| p.steam_id == attacker.to_string())
@@ -520,6 +526,9 @@ async fn perround(
                     common::demo_analysis::RoundEvent::Killed {
                         attacker: attacker_name,
                         died: died_name,
+                        weapon,
+                        headshot,
+                        noscope,
                     }
                 }
             })

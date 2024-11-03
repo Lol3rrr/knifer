@@ -74,5 +74,11 @@ pub enum RoundWinReason {
 pub enum RoundEvent {
     BombPlanted,
     BombDefused,
-    Killed { attacker: String, died: String },
+    Killed {
+        attacker: String,
+        died: String,
+        weapon: Option<String>,
+        noscope: bool,
+        headshot: bool,
+    },
 }
