@@ -111,6 +111,8 @@ where
         let result = db_con
             .build_transaction()
             .run::<_, TaskError<AE>, _>(|conn| {
+
+
                 Box::pin(async move {
                     let mut results: Vec<crate::models::AnalysisTask> = query.load(conn).await?;
                     let task = match results.pop() {
@@ -118,21 +120,28 @@ where
                         None => return Ok(None),
                     };
 
-                    let input = AnalysisInput::load(
-                        task.steam_id.clone(),
-                        task.demo_id.clone(),
+                    let delete_query =
+                        diesel::dsl::delete(crate::schema::analysis_queue::dsl::analysis_queue)
+                            .filter(crate::schema::analysis_queue::dsl::demo_id.eq(task.demo_id.clone()))
+                            .filter(crate::schema::analysis_queue::dsl::steam_id.eq(task.steam_id.clone()));
+
+                    let input = match AnalysisInput::load(
+                        task.steam_id,
+                        task.demo_id,
                         storage.as_ref(),
                     )
-                    .await
-                    .unwrap();
+                    .await {
+                        Ok(i) => i,
+                        Err(e) => {
+                            tracing::error!("Loading Analysis Input: {:?}", e);
+                            delete_query.execute(conn).await?;
+                            return Ok(Some(()));
+                        }
+                    };
 
                     let tmp = action(input, &mut *conn);
                     tmp.await.map_err(|e| TaskError::RunningAction(e))?;
 
-                    let delete_query =
-                        diesel::dsl::delete(crate::schema::analysis_queue::dsl::analysis_queue)
-                            .filter(crate::schema::analysis_queue::dsl::demo_id.eq(task.demo_id))
-                            .filter(crate::schema::analysis_queue::dsl::steam_id.eq(task.steam_id));
                     delete_query.execute(conn).await?;
 
                     Ok(Some(()))

@@ -154,12 +154,10 @@ impl DemoStorage for S3Storage {
             let body_reader = tokio_util::io::StreamReader::new(body_with_io_error);
             futures::pin_mut!(body_reader);
 
-            self.bucket.list(String::new(), None).await.unwrap();
-
             self.bucket
                 .put_object_stream(&mut body_reader, path)
                 .await
-                .unwrap();
+                .map_err(|e| format!("Uploading Stream to bucket: {:?}", e))?;
 
             Ok(())
         }
@@ -178,7 +176,7 @@ impl DemoStorage for S3Storage {
             let path = std::path::PathBuf::new().join(user_id).join(demo_id);
             let path = path.to_str().unwrap();
 
-            let resp = self.bucket.get_object(path).await.unwrap();
+            let resp = self.bucket.get_object(path).await.map_err(|e| format!("Loading from Bucket: {:?}", e))?;
 
             Ok(crate::analysis::AnalysisData::Preloaded(
                 resp.to_vec().into(),
