@@ -31,6 +31,8 @@ pub fn per_round() -> impl leptos::IntoView {
         .round_overview {
             display: inline-grid;
 
+            margin-top: 2vh;
+
             width: 90vw;
             grid-template-columns: auto repeat(12, 1fr) 5px repeat(12, 1fr) 5px repeat(3, 1fr) 5px repeat(3, 1fr);
             grid-template-rows: repeat(3, auto);
@@ -201,8 +203,6 @@ pub fn per_round() -> impl leptos::IntoView {
 
     view! {
         class=style,
-        <h3>Per Round</h3>
-
         <div class="round_overview">
             { team_names }
             { round_overview }

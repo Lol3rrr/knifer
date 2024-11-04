@@ -45,18 +45,23 @@ fn demo_list(
         "DemoList",
         .list {
             display: inline-grid;
+            width: 100%;
 
             grid-template-columns: auto auto auto;
-            row-gap: 1ch;
+            row-gap: 1vh;
+        }
+
+        .headers {
+            font-size: 22px;
         }
     };
 
     view! {
         class=style,
         <div class="list">
-            <span>Score</span>
-            <span>Date</span>
-            <span>Map</span>
+            <span class="headers">Score</span>
+            <span class="headers">Date</span>
+            <span class="headers">Map</span>
 
             { move || demos.get().map(|d| d.done).unwrap_or_default().into_iter().enumerate().map(|(i, demo)| view! { <DemoListEntry demo idx=i+1 /> }).collect::<Vec<_>>() }
         </div>
@@ -70,11 +75,13 @@ fn demo_list_entry(demo: common::BaseDemoInfo, idx: usize) -> impl leptos::IntoV
         .entry {
             display: inline-block;
 
-            border: solid #030303aa 1px;
-
             grid-column: 1 / 4;
             width: 100%;
             height: 100%;
+        }
+        .background_entry {
+            background-color: var(--color-surface-a20);
+            border-radius: 6px;
         }
 
         .score, .map {
@@ -121,6 +128,7 @@ fn demo_list_entry(demo: common::BaseDemoInfo, idx: usize) -> impl leptos::IntoV
 
     view! {
         class=style,
+            <span class="entry background_entry" style=format!("grid-row: {};", idx + 1)></span>
             <span
                 class="score"
                 style=format!("grid-row: {};", idx + 1)
@@ -130,7 +138,7 @@ fn demo_list_entry(demo: common::BaseDemoInfo, idx: usize) -> impl leptos::IntoV
             >{demo.team2_score}:{demo.team3_score}</span>
             <div class="date" style=format!("grid-row: {};", idx + 1)>
                 <span>{demo.uploaded_at.format("%Y-%m-%d").to_string()}</span>
-                <span>{demo.uploaded_at.format("%H-%M-%S").to_string()}</span>
+                <span>{demo.uploaded_at.format("%H:%M:%S").to_string()}</span>
             </div>
             <span class="map" style=format!("grid-row: {};", idx + 1)>{demo.map}</span>
             <a class="entry" href=format!("demo/{}/scoreboard", demo.id) style=format!("grid-row: {};", idx + 1)></a>

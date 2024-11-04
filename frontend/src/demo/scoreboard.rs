@@ -77,7 +77,7 @@ fn team_scoreboard(
     let style = stylers::style! {
         "Team-Scoreboard",
         tr:nth-child(even) {
-            background-color: #dddddd;
+            background-color: var(--color-surface-a10);
         }
 
         th {

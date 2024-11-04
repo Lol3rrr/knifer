@@ -43,8 +43,9 @@ pub fn top_bar(update_demo_visible: WriteSignal<DemoUploadStatus>) -> impl lepto
             height: 4vh;
             padding-top: 0.5vh;
             padding-bottom: 0.5vh;
+            border-radius: 6px;
 
-            background-color: #28282f;
+            background-color: var(--color-surface-a10);
             color: #d5d5d5;
 
             display: grid;
@@ -58,7 +59,7 @@ pub fn top_bar(update_demo_visible: WriteSignal<DemoUploadStatus>) -> impl lepto
         }
 
         .logo {
-            color: #d5d5d5;
+            color: var(--color-primary-a50);
             width: 15vw;
             font-size: 24px;
             padding: 0px;

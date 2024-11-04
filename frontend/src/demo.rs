@@ -44,18 +44,6 @@ pub fn demo() -> impl leptos::IntoView {
 
     let style = stylers::style! {
         "Demo",
-        .analysis_bar {
-            display: grid;
-            grid-template-columns: auto auto auto;
-            column-gap: 20px;
-
-            background-color: #2d2d2d;
-        }
-
-        .analysis_selector {
-            display: inline-block;
-        }
-
         span {
             display: inline-block;
 
@@ -66,13 +54,22 @@ pub fn demo() -> impl leptos::IntoView {
         .current {
             background-color: #5d5d5d;
         }
+
+        .demo_heading {
+            display: grid;
+            margin: 2vh 0px;
+            grid-template-columns: auto auto;
+        }
     };
 
     view! {class = style,
-        <h2>Demo - { id } - { map }</h2>
-
-        <button on:click=move |_| rerun_analysis.dispatch(())>Rerun analysis</button>
+        <div class="demo_heading">
+            <h2>Demo - { id } - { map }</h2>
+            <button on:click=move |_| rerun_analysis.dispatch(()) style="display: inline-block;">Rerun Analysis</button>
+        </div>
+        
         <TabBar prefix=move || format!("/demo/{}/", id()) parts=&[("scoreboard", "Scoreboard"), ("perround", "Per Round"), ("heatmaps", "Heatmaps")] />
+        
         <div>
             <Outlet/>
         </div>
@@ -104,13 +101,13 @@ where
     };
 
     let style = stylers::style! {
-        "Demo",
+        "TabBar",
         .analysis_bar {
             display: grid;
             grid-template-columns: repeat(var(--rows), auto);
             column-gap: 20px;
 
-            background-color: #2d2d2d;
+            background-color: var(--color-surface-a10);
         }
 
         .analysis_selector {
@@ -120,25 +117,25 @@ where
         span {
             display: inline-block;
 
-            padding: 1vw 1vh;
+            padding: 1vh 1vw;
             color: #d5d5d5;
-            background-color: #4d4d4d;
+            background-color: var(--color-surface-a20);
         }
         .current {
-            background-color: #5d5d5d;
+            background-color: var(--color-surface-a30);
         }
     };
 
     let tabs = move || {
         parts.into_iter().map(|(routename, name)| {
-        view! {class=style,
-            <div class="analysis_selector" class:current=move || selected_tab() == routename.to_string()>
-                <A href=routename.to_string()>
-                    <span>{ name.to_string() }</span>
-                </A>
-            </div>
-        }
-    }).collect::<Vec<_>>()
+            view! {class=style,
+                <div class="analysis_selector" class:current=move || selected_tab() == routename.to_string()>
+                    <A href=routename.to_string()>
+                        <span>{ name.to_string() }</span>
+                    </A>
+                </div>
+            }
+        }).collect::<Vec<_>>()
     };
 
     view! {class = style,

@@ -1,0 +1,26 @@
+* {
+/** Generated using https://colorffy.com/dark-theme-generator?colors=40f7f4-121212 */
+/** Dark theme primary colors */
+--color-primary-a0: #40f7f4;
+--color-primary-a10: #66f8f5;
+--color-primary-a20: #81faf6;
+--color-primary-a30: #98fbf8;
+--color-primary-a40: #acfcf9;
+--color-primary-a50: #befdfa;
+
+/** Dark theme surface colors */
+--color-surface-a0: #121212;
+--color-surface-a10: #282828;
+--color-surface-a20: #3f3f3f;
+--color-surface-a30: #575757;
+--color-surface-a40: #717171;
+--color-surface-a50: #8b8b8b;
+
+/** Dark theme mixed surface colors */
+--color-surface-mixed-a0: #1b2525;
+--color-surface-mixed-a10: #303939;
+--color-surface-mixed-a20: #474f4f;
+--color-surface-mixed-a30: #5e6666;
+--color-surface-mixed-a40: #777e7d;
+--color-surface-mixed-a50: #919696;
+}
