@@ -23,8 +23,8 @@ impl AnalysisInput {
         steamid: String,
         demoid: String,
         storage: &dyn crate::storage::DemoStorage,
-    ) -> Result<Self, ()> {
-        let data = storage.load(steamid.clone(), demoid.clone()).await.unwrap();
+    ) -> Result<Self, String> {
+        let data = storage.load(steamid.clone(), demoid.clone()).await?;
 
         Ok(Self {
             steamid,
