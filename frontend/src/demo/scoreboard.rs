@@ -2,7 +2,7 @@ use leptos::*;
 use leptos_router::Outlet;
 
 pub mod general;
-pub mod utility;
+pub mod headtohead;
 
 use crate::demo::TabBar;
 
@@ -12,7 +12,7 @@ pub fn scoreboard() -> impl leptos::IntoView {
     let id = move || params.with(|params| params.get("id").cloned().unwrap_or_default());
 
     view! {
-        <TabBar prefix=move || format!("/demo/{}/scoreboard", id()) parts=&[("general", "General"), ("utility", "Utility")] />
+        <TabBar prefix=move || format!("/demo/{}/scoreboard", id()) parts=&[("general", "General"), ("headtohead", "Head-to-Head")] />
 
         <Outlet />
     }

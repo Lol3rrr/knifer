@@ -22,6 +22,7 @@ pub fn router(storage: Box<dyn crate::storage::DemoStorage>) -> axum::Router {
         .route("/:id/analysis/scoreboard", axum::routing::get(scoreboard))
         .route("/:id/analysis/perround", axum::routing::get(perround))
         .route("/:id/analysis/heatmap", axum::routing::get(heatmap))
+        .route("/:id/analysis/headtohead", axum::routing::get(head_to_head))
         .with_state(Arc::new(DemoState { storage }))
 }
 
@@ -553,6 +554,49 @@ async fn perround(
     Ok(axum::Json(common::demo_analysis::PerRoundResult {
         rounds: result,
         teams,
+    }))
+}
+
+#[tracing::instrument(skip(session))]
+async fn head_to_head(
+    session: UserSession,
+    Path(demo_id): Path<String>,
+) -> Result<axum::response::Json<common::demo_analysis::HeadToHead>, axum::http::StatusCode> {
+    let mut db_con = crate::db_connection().await;
+
+    let head_to_head_query = crate::schema::demo_head_to_head::dsl::demo_head_to_head
+        .filter(crate::schema::demo_head_to_head::dsl::demo_id.eq(demo_id.clone()));
+
+    let player_query = crate::schema::demo_players::dsl::demo_players
+        .filter(crate::schema::demo_players::dsl::demo_id.eq(demo_id));
+
+    let (players, head_to_head_entries) = db_con.build_transaction().read_only().run(|connection| Box::pin(async move {
+        let head_to_head_entries: Vec<crate::models::DemoHeadToHead> = head_to_head_query.load(connection).await?;
+        let players: Vec<crate::models::DemoPlayer> = player_query.load(connection).await?;
+
+        Ok::<_, diesel::result::Error>((players, head_to_head_entries))
+    })).await.map_err(|e| {
+            tracing::error!("Querying DB: {:?}", e);
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    let (mut row_team, mut column_team): (Vec<_>, Vec<_>) = players.into_iter().partition(|p| p.team == 2);
+    row_team.sort_unstable_by_key(|p| p.color);
+    column_team.sort_unstable_by_key(|p| p.color);
+
+    let results: Vec<_> = row_team.iter().map(|row_player| {
+        column_team.iter().map(|column_player| {
+            let row_kills = head_to_head_entries.iter().find(|entry| entry.player == row_player.steam_id && entry.enemy == column_player.steam_id);
+            let column_kills = head_to_head_entries.iter().find(|entry| entry.player == column_player.steam_id && entry.enemy == row_player.steam_id);
+
+            (row_kills.map(|k| k.kills).unwrap_or(0), column_kills.map(|k| k.kills).unwrap_or(0))
+        }).collect::<Vec<_>>()
+    }).collect();
+
+    Ok(axum::Json(common::demo_analysis::HeadToHead {
+        row_players: row_team.into_iter().map(|p| p.name).collect(),
+        column_players: column_team.into_iter().map(|p| p.name).collect(),
+        entries: results,
     }))
 }
 

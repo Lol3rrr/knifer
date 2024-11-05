@@ -82,3 +82,10 @@ pub enum RoundEvent {
         headshot: bool,
     },
 }
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct HeadToHead {
+    pub row_players: Vec<String>,
+    pub column_players: Vec<String>,
+    pub entries: Vec<Vec<(i16, i16)>>,
+}

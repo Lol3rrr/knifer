@@ -120,3 +120,13 @@ pub struct DemoRound {
     pub win_reason: String,
     pub events: serde_json::Value,
 }
+
+#[derive(Queryable, Selectable, Insertable, Debug)]
+#[diesel(table_name = crate::schema::demo_head_to_head)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct DemoHeadToHead {
+    pub demo_id: String,
+    pub player: String,
+    pub enemy: String,
+    pub kills: i16,
+}

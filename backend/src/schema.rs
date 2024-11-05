@@ -9,6 +9,15 @@ diesel::table! {
 }
 
 diesel::table! {
+    demo_head_to_head (demo_id, player, enemy) {
+        demo_id -> Text,
+        player -> Text,
+        enemy -> Text,
+        kills -> Int2,
+    }
+}
+
+diesel::table! {
     demo_heatmaps (demo_id, steam_id, team) {
         demo_id -> Text,
         steam_id -> Text,
@@ -97,6 +106,7 @@ diesel::table! {
 
 diesel::allow_tables_to_appear_in_same_query!(
     analysis_queue,
+    demo_head_to_head,
     demo_heatmaps,
     demo_info,
     demo_player_stats,

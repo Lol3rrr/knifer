@@ -4,6 +4,7 @@ use diesel_async::RunQueryDsl;
 pub mod base;
 pub mod heatmap;
 pub mod perround;
+pub mod head_to_head;
 
 #[derive(Debug, Clone)]
 pub enum AnalysisData {
@@ -61,12 +62,13 @@ pub trait Analysis {
     >;
 }
 
-pub static ANALYSIS_METHODS: std::sync::LazyLock<[std::sync::Arc<dyn Analysis + Send + Sync>; 3]> =
+pub static ANALYSIS_METHODS: std::sync::LazyLock<[std::sync::Arc<dyn Analysis + Send + Sync>; 4]> =
     std::sync::LazyLock::new(|| {
         [
             std::sync::Arc::new(base::BaseAnalysis::new()),
             std::sync::Arc::new(heatmap::HeatmapAnalysis::new()),
             std::sync::Arc::new(perround::PerRoundAnalysis::new()),
+            std::sync::Arc::new(head_to_head::HeadToHeadAnalysis::new()),
         ]
     });
 
