@@ -27,6 +27,9 @@ struct CliArgs {
 
     #[clap(long = "analysis", default_value_t = true)]
     analysis: bool,
+
+    #[clap(long = "gc", default_value_t = true)]
+    garbage_collection: bool,
 }
 
 #[tokio::main(flavor = "multi_thread")]
@@ -93,7 +96,12 @@ async fn main() {
     if args.analysis {
         tracing::info!("Enabled Analysis module");
 
-        component_set.spawn(backend::run_analysis(storage));
+        component_set.spawn(backend::run_analysis(storage.duplicate()));
+    }
+    if args.garbage_collection {
+        tracing::info!("Enabled Garbage-Collection module");
+
+        component_set.spawn(backend::run_garbage_collection(storage));
     }
     tracing::info!("Started modules");
 

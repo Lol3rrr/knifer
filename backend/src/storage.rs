@@ -21,6 +21,9 @@ pub trait DemoStorage: Send + Sync {
     ) -> futures::future::BoxFuture<'f, Result<crate::analysis::AnalysisData, String>>
     where
         'own: 'f;
+
+    fn list_demos<'own, 'f>(&'own self) -> futures::future::BoxFuture<'f, Result<Vec<String>, String>>
+    where 'own: 'f;
 }
 
 pub struct FileStorage {
@@ -107,6 +110,14 @@ impl DemoStorage for FileStorage {
         }
         .boxed()
     }
+
+    fn list_demos<'own, 'f>(&'own self) -> futures::future::BoxFuture<'f, Result<Vec<String>, String>>
+    where 'own: 'f {
+        async move {
+            // TODO
+            Ok(Vec::new())
+        }.boxed()
+    }
 }
 
 pub struct S3Storage {
@@ -183,5 +194,21 @@ impl DemoStorage for S3Storage {
             ))
         }
         .boxed()
+    }
+
+    fn list_demos<'own, 'f>(&'own self) -> futures::future::BoxFuture<'f, Result<Vec<String>, String>>
+    where 'own: 'f {
+        async move {
+            let listed = match self.bucket.list("".to_string(), None).await {
+                Ok(l) => l,
+                Err(e) => return Err(format!("{:?}", e)),
+            };
+
+            Ok(listed.into_iter().flat_map(|rs| {
+                rs.contents.into_iter().map(|entry| {
+                    entry.key
+                })
+            }).collect())
+        }.boxed()
     }
 }

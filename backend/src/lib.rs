@@ -8,6 +8,8 @@ pub mod diesel_sessionstore;
 
 pub mod analysis;
 
+mod gc;
+
 pub async fn db_connection() -> diesel_async::AsyncPgConnection {
     use diesel_async::AsyncConnection;
 
@@ -130,5 +132,18 @@ pub async fn run_analysis(storage: Box<dyn crate::storage::DemoStorage>) {
             tokio::time::sleep(std::time::Duration::from_secs(30)).await;
             continue;
         }
+    }
+}
+
+#[tracing::instrument(skip(storage))]
+pub async fn run_garbage_collection(mut storage: Box<dyn crate::storage::DemoStorage>) {
+    loop {
+        tracing::info!("Running Garbage Collection");
+
+        if let Err(e) = gc::run_gc(storage.as_mut()).await {
+            tracing::error!("Running GC {:?}", e);
+        }
+
+        tokio::time::sleep(std::time::Duration::from_secs(15 * 60)).await;
     }
 }
